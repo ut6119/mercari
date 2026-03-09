@@ -4,7 +4,9 @@
   "scripts": {
     "push": "./node_modules/.bin/clasp push --force",
     "deploy": "./scripts/deploy-webapp.sh",
-    "deploy:new": "./scripts/deploy-webapp.sh --new"
+    "deploy:new": "./scripts/deploy-webapp.sh --new",
+    "copy:secret:clasprc": "./scripts/copy-github-secret.sh clasprc",
+    "copy:secret:deployid": "./scripts/copy-github-secret.sh deployment-id"
   },
   "dependencies": {
     "@google/clasp": "^3.2.0"

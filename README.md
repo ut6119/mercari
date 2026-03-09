@@ -34,6 +34,11 @@ GitHub リポジトリ側で以下の Secrets を設定してください。
 - `CLASPRC_JSON`: ローカルの `~/.clasprc.json` の中身
 - `GAS_DEPLOYMENT_ID`（任意）: 固定URLを維持したいときのデプロイID
 
+macOSなら以下で値をクリップボードへコピーできます。
+
+- `npm run copy:secret:clasprc`
+- `npm run copy:secret:deployid`
+
 ## 期待するシート構成
 
 - シート名: `メルカリ`
