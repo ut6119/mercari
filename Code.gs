@@ -195,11 +195,17 @@ function readItems_() {
       return;
     }
 
-    if (statusMeta === 'summary') {
+    const name = String(row[0] || '').trim();
+    const summaryLabel = isSummaryLabel_(name);
+    const unsoldLabel = isUnsoldSectionLabel_(name);
+
+    if (statusMeta === 'summary' && (summaryLabel || unsoldLabel)) {
+      if (unsoldLabel) {
+        separatorSeen = true;
+      }
       return;
     }
 
-    const name = String(row[0] || '').trim();
     if (isUnsoldSectionLabel_(name) && !idMeta) {
       separatorSeen = true;
       return;
@@ -209,11 +215,11 @@ function readItems_() {
       return;
     }
 
-    if (isSummaryLabel_(name) && !idMeta) {
+    if (summaryLabel && !idMeta) {
       return;
     }
 
-    let status = statusMeta;
+    let status = statusMeta === 'summary' ? '' : statusMeta;
     if (!status) {
       const revenue = parseNumber_(row[1]);
       const cost = parseNumber_(row[4]);
