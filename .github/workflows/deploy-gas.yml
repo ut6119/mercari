@@ -37,7 +37,7 @@ jobs:
       - name: Validate required secrets
         run: |
           test -n "$CLASPRC_JSON" || { echo "ERROR: CLASPRC_JSON is missing"; exit 1; }
-          echo "$CLASPRC_JSON" | jq -e '.token.refresh_token and .oauth2ClientSettings.clientId' >/dev/null \
+          node -e 'const s=process.env.CLASPRC_JSON||"";let o;try{o=JSON.parse(s)}catch(e){process.exit(2)};if(!o?.token?.refresh_token||!o?.oauth2ClientSettings?.clientId)process.exit(3);' \
             || { echo "ERROR: CLASPRC_JSON format is invalid"; exit 1; }
           if [ -z "$GAS_DEPLOYMENT_ID" ]; then
             echo "WARN: GAS_DEPLOYMENT_ID is empty. New deployment URL may be created."
@@ -52,4 +52,8 @@ jobs:
         run: echo "$GAS_DEPLOYMENT_ID" > .gas-deployment-id
 
       - name: Deploy
-        run: npm run deploy -- "github-actions deploy ${GITHUB_SHA::7}"
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHORT_SHA="${GITHUB_SHA::7}"
+          npm run deploy -- "github-actions deploy ${SHORT_SHA}"

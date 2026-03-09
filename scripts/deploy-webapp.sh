@@ -24,8 +24,12 @@ echo "[1/3] push"
 "$CLASP_BIN" push --force
 
 echo "[2/3] version"
-VERSION_OUT="$("$CLASP_BIN" version "$DESCRIPTION")"
-VERSION_NUM="$(echo "$VERSION_OUT" | sed -n 's/^Created version \([0-9][0-9]*\)$/\1/p')"
+if ! VERSION_OUT="$("$CLASP_BIN" version "$DESCRIPTION" 2>&1)"; then
+  echo "Error: clasp version failed." >&2
+  echo "$VERSION_OUT" >&2
+  exit 1
+fi
+VERSION_NUM="$(echo "$VERSION_OUT" | sed -n 's/.*Created version \([0-9][0-9]*\).*/\1/p' | tail -n 1)"
 
 if [[ -z "$VERSION_NUM" ]]; then
   echo "Error: failed to parse version number from clasp output." >&2
@@ -40,17 +44,29 @@ fi
 
 if [[ -n "$DEPLOY_ID" ]]; then
   echo "[3/3] redeploy (stable URL)"
-  "$CLASP_BIN" redeploy "$DEPLOY_ID" -V "$VERSION_NUM" -d "$DESCRIPTION"
+  if ! REDEPLOY_OUT="$("$CLASP_BIN" redeploy "$DEPLOY_ID" -V "$VERSION_NUM" -d "$DESCRIPTION" 2>&1)"; then
+    echo "Error: clasp redeploy failed." >&2
+    echo "$REDEPLOY_OUT" >&2
+    exit 1
+  fi
 else
   echo "[3/3] deploy (new URL)"
-  DEPLOY_OUT="$("$CLASP_BIN" deploy -V "$VERSION_NUM" -d "$DESCRIPTION")"
-  DEPLOY_ID="$(echo "$DEPLOY_OUT" | sed -n 's/^Deployed \([^ ]*\) @.*$/\1/p')"
+  if ! DEPLOY_OUT="$("$CLASP_BIN" deploy -V "$VERSION_NUM" -d "$DESCRIPTION" 2>&1)"; then
+    echo "Error: clasp deploy failed." >&2
+    echo "$DEPLOY_OUT" >&2
+    exit 1
+  fi
+  DEPLOY_ID="$(echo "$DEPLOY_OUT" | sed -n 's/.*Deployed \([^ ]*\) @.*/\1/p' | tail -n 1)"
   if [[ -z "$DEPLOY_ID" ]]; then
     echo "Error: failed to parse deployment id from clasp output." >&2
     echo "$DEPLOY_OUT" >&2
     exit 1
   fi
   echo "$DEPLOY_ID" > "$DEPLOY_ID_FILE"
+fi
+
+if [[ -n "${REDEPLOY_OUT:-}" ]]; then
+  echo "$REDEPLOY_OUT"
 fi
 
 echo
