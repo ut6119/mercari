@@ -39,6 +39,8 @@ const unsoldToolbar = document.getElementById('unsoldToolbar');
 const quickAddForm = document.getElementById('quickAddForm');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
+const undoButton = document.getElementById('undoButton');
+const redoButton = document.getElementById('redoButton');
 const refreshButton = document.getElementById('refreshButton');
 const archiveButton = document.getElementById('archiveButton');
 const addButton = document.getElementById('addButton');
@@ -47,6 +49,9 @@ const selectionMode = {
   sold: false,
   unsold: false
 };
+const historyPast = [];
+const historyFuture = [];
+const HISTORY_LIMIT = 40;
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -106,6 +111,14 @@ function bindEvents() {
 
   refreshButton.addEventListener('click', function() {
     reloadData('最新状態を読み込みました。');
+  });
+
+  undoButton.addEventListener('click', function() {
+    void handleUndo();
+  });
+
+  redoButton.addEventListener('click', function() {
+    void handleRedo();
   });
 
   archiveButton.addEventListener('click', async function() {
@@ -283,6 +296,127 @@ async function handleBulkAction(status, event) {
   });
 }
 
+async function handleUndo() {
+  if (!historyPast.length) {
+    showToast('これ以上戻せません。');
+    return;
+  }
+
+  await runApi(async function() {
+    const snapshot = historyPast.pop();
+    if (currentData) {
+      historyFuture.push(createSnapshot_(currentData));
+      trimHistory_(historyFuture);
+    }
+    await applySnapshot_(snapshot);
+    showToast('戻しました。');
+  });
+}
+
+async function handleRedo() {
+  if (!historyFuture.length) {
+    showToast('これ以上進めません。');
+    return;
+  }
+
+  await runApi(async function() {
+    const snapshot = historyFuture.pop();
+    if (currentData) {
+      historyPast.push(createSnapshot_(currentData));
+      trimHistory_(historyPast);
+    }
+    await applySnapshot_(snapshot);
+    showToast('進めました。');
+  });
+}
+
+async function applySnapshot_(snapshot) {
+  const targetItems = normalizeSnapshotItems_(snapshot && snapshot.items ? snapshot.items : []);
+  const currentItems = extractItemsFromData_(currentData || { soldItems: [], unsoldItems: [] });
+  const targetIds = new Set(targetItems.map(function(item) { return item.id; }));
+  const deleteIds = currentItems
+    .map(function(item) { return item.id; })
+    .filter(function(id) { return !targetIds.has(id); });
+
+  if (deleteIds.length > 0) {
+    try {
+      await request('/api/items/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'deleteMany', itemIds: deleteIds })
+      });
+    } catch (_error) {
+      for (const id of deleteIds) {
+        await request('/api/items/' + encodeURIComponent(id), { method: 'DELETE' });
+      }
+    }
+  }
+
+  let latestData = null;
+  for (const item of targetItems) {
+    latestData = await request('/api/items', {
+      method: 'POST',
+      body: JSON.stringify(item)
+    });
+  }
+  if (!latestData) {
+    latestData = await request('/api/dashboard');
+  }
+  render(latestData, { skipHistory: true });
+}
+
+function createSnapshot_(data) {
+  return {
+    items: extractItemsFromData_(data)
+  };
+}
+
+function extractItemsFromData_(data) {
+  const soldItems = (data && data.soldItems ? data.soldItems : []).map(function(item) {
+    return {
+      id: item.id,
+      status: 'sold',
+      name: item.name || '',
+      revenue: sanitizeAmount_(item.revenue),
+      shipping: sanitizeAmount_(item.shipping, DEFAULT_SHIPPING),
+      cost: sanitizeAmount_(item.cost)
+    };
+  });
+  const unsoldItems = (data && data.unsoldItems ? data.unsoldItems : []).map(function(item) {
+    return {
+      id: item.id,
+      status: 'unsold',
+      name: item.name || '',
+      revenue: sanitizeAmount_(item.revenue),
+      shipping: sanitizeAmount_(item.shipping, DEFAULT_SHIPPING),
+      cost: sanitizeAmount_(item.cost)
+    };
+  });
+  return soldItems.concat(unsoldItems);
+}
+
+function normalizeSnapshotItems_(items) {
+  return (Array.isArray(items) ? items : [])
+    .map(function(item) {
+      return {
+        id: String(item.id || '').trim(),
+        status: normalizeStatusValue_(item.status) || 'unsold',
+        name: String(item.name || '').trim(),
+        revenue: sanitizeAmount_(item.revenue),
+        shipping: sanitizeAmount_(item.shipping, DEFAULT_SHIPPING),
+        cost: sanitizeAmount_(item.cost)
+      };
+    })
+    .filter(function(item) {
+      return Boolean(item.id) && Boolean(item.name);
+    });
+}
+
+function trimHistory_(stack) {
+  while (stack.length > HISTORY_LIMIT) {
+    stack.shift();
+  }
+}
+
 function getBodyByStatus(status) {
   return status === 'sold' ? soldTableBody : unsoldTableBody;
 }
@@ -318,6 +452,10 @@ function setSelectionMode(status, enabled) {
   const panel = getPanelByStatus(status);
   if (panel) {
     panel.classList.toggle('selection-mode', enabled);
+    const toggleButton = panel.querySelector('[data-bulk-action="toggle-selection"]');
+    if (toggleButton) {
+      toggleButton.textContent = enabled ? '解除' : '選択';
+    }
   }
   if (!enabled) {
     setRowsSelected(status, false);
@@ -332,6 +470,10 @@ function updateSelectAllButtonLabel(status) {
   if (!panel) return;
   const button = panel.querySelector('[data-bulk-action="toggle-select-all"]');
   if (!button) return;
+  if (!selectionMode[status]) {
+    button.textContent = '全選択';
+    return;
+  }
 
   const totalRows = Array.from(getBodyByStatus(status).querySelectorAll('tr[data-id]')).length;
   const selectedCount = getSelectedRows(status).length;
@@ -862,12 +1004,27 @@ async function runApi(fn) {
 
 function togglePending(isPending) {
   const bulkButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
-  [refreshButton, archiveButton, addButton].concat(bulkButtons).forEach(function(button) {
+  [undoButton, redoButton, refreshButton, archiveButton, addButton].concat(bulkButtons).forEach(function(button) {
     button.disabled = isPending;
   });
+  if (!isPending) {
+    updateHistoryButtons_();
+  }
 }
 
-function render(data) {
+function updateHistoryButtons_() {
+  if (undoButton) undoButton.disabled = pending || historyPast.length === 0;
+  if (redoButton) redoButton.disabled = pending || historyFuture.length === 0;
+}
+
+function render(data, options) {
+  const renderOptions = options || {};
+  if (!renderOptions.skipHistory && currentData) {
+    historyPast.push(createSnapshot_(currentData));
+    trimHistory_(historyPast);
+    historyFuture.length = 0;
+  }
+
   currentData = data;
   const summary = data.summary;
   applySummary(summary, data.lastUpdated);
@@ -882,6 +1039,7 @@ function render(data) {
 
   setSelectionMode('sold', selectionMode.sold);
   setSelectionMode('unsold', selectionMode.unsold);
+  updateHistoryButtons_();
 }
 
 function renderSoldRow(item) {
