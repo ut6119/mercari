@@ -51,4 +51,10 @@ jobs:
         run: |
           set -euo pipefail
           SHORT_SHA="${GITHUB_SHA::7}"
-          npm run deploy -- "github-actions deploy ${SHORT_SHA}"
+          if ! npm run deploy -- "github-actions deploy ${SHORT_SHA}" > deploy.log 2>&1; then
+            tail -n 80 deploy.log || true
+            ERR_MSG="$(tail -n 5 deploy.log | tr '\n' ' ' | sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e 's/\n/%0A/g')"
+            echo "::error title=DeployFailed::${ERR_MSG}"
+            exit 1
+          fi
+          cat deploy.log
