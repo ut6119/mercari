@@ -19,7 +19,6 @@ const unsoldCountLabel = document.getElementById('unsoldCountLabel');
 const soldTableBody = document.getElementById('soldTableBody');
 const unsoldTableBody = document.getElementById('unsoldTableBody');
 const quickAddForm = document.getElementById('quickAddForm');
-const revenueField = document.getElementById('revenueField');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
 const refreshButton = document.getElementById('refreshButton');
@@ -44,8 +43,9 @@ function bindEvents() {
       document.querySelectorAll('[data-status-tab]').forEach(function(tab) {
         tab.classList.toggle('active', tab === button);
       });
-      revenueField.classList.toggle('hidden', draftStatus !== 'sold');
-      shippingInput.value = draftStatus === 'sold' ? '160' : '';
+      if (!shippingInput.value) {
+        shippingInput.value = '160';
+      }
     });
   });
 
@@ -79,6 +79,7 @@ function bindEvents() {
         body: JSON.stringify(payload)
       });
       quickAddForm.reset();
+      shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
       showToast('商品を追加しました。');
@@ -112,9 +113,6 @@ async function handleSoldAction(event) {
   }
 
   const payload = readRowPayload(row, action === 'unsold' ? 'unsold' : 'sold');
-  if (action === 'unsold') {
-    payload.revenue = '';
-  }
 
   await runApi(async function() {
     const data = await request('/api/items', {
@@ -145,9 +143,6 @@ async function handleUnsoldAction(event) {
   }
 
   const payload = readRowPayload(row, action === 'sell' ? 'sold' : 'unsold');
-  if (action !== 'sell') {
-    payload.revenue = '';
-  }
 
   await runApi(async function() {
     const data = await request('/api/items', {
@@ -260,11 +255,11 @@ function render(data) {
 
   soldTableBody.innerHTML = data.soldItems.length
     ? data.soldItems.map(renderSoldRow).join('')
-    : '<tr class="table-empty"><td colspan="8">販売済み商品はまだありません。</td></tr>';
+    : '<tr class="table-empty"><td colspan="7">販売済み商品はまだありません。</td></tr>';
 
   unsoldTableBody.innerHTML = data.unsoldItems.length
     ? data.unsoldItems.map(renderUnsoldRow).join('')
-    : '<tr class="table-empty"><td colspan="8">未販売在庫はまだありません。</td></tr>';
+    : '<tr class="table-empty"><td colspan="7">未販売在庫はまだありません。</td></tr>';
 }
 
 function renderSoldRow(item) {
@@ -274,7 +269,6 @@ function renderSoldRow(item) {
     <tr class="${rowClass}" data-id="${escapeHtml(item.id)}">
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
       <td><input data-field="revenue" type="number" min="0" step="1" value="${escapeHtml(String(item.revenue || ''))}"></td>
-      <td class="money">${formatYen(item.fee)}</td>
       <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String(item.shipping || 0))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money">${formatSignedYen(item.profit)}</td>
@@ -294,9 +288,8 @@ function renderUnsoldRow(item) {
   return `
     <tr class="row-unsold" data-id="${escapeHtml(item.id)}">
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
-      <td><input data-field="revenue" type="number" min="0" step="1" placeholder="売れたら入力"></td>
-      <td class="money">${formatYen(0)}</td>
-      <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String(item.shipping || ''))}"></td>
+      <td><input data-field="revenue" type="number" min="0" step="1" placeholder="0" value="${escapeHtml(String(item.revenue || ''))}"></td>
+      <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String((item.shipping === '' || item.shipping === null || typeof item.shipping === 'undefined') ? 160 : item.shipping))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill neutral">--</span></td>

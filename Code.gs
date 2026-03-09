@@ -330,9 +330,9 @@ function writeSheetFromItems_(items, targetSheet) {
   unsoldItems.forEach(function(item) {
     sheet.getRange(rowPointer, 1, 1, META_STATUS_COLUMN).setValues([[
       item.name,
+      item.revenue || '',
       '',
-      '',
-      item.shipping || '',
+      item.shipping === '' ? DEFAULT_SHIPPING : item.shipping,
       item.cost,
       -item.cost,
       '',
@@ -374,10 +374,8 @@ function sanitizePayload_(payload) {
     id: String(source.id || Utilities.getUuid()),
     status: status,
     name: String(source.name || '').trim(),
-    revenue: status === 'sold' ? revenue : 0,
-    shipping: status === 'sold'
-      ? (shippingInput === '' ? DEFAULT_SHIPPING : shippingInput)
-      : (shippingInput === '' ? '' : shippingInput),
+    revenue: revenue,
+    shipping: shippingInput === '' ? DEFAULT_SHIPPING : shippingInput,
     cost: cost
   };
 }
