@@ -272,17 +272,78 @@ async function request(url, options) {
     throw new Error('未対応のAPI呼び出しです。');
   }
 
+  params.set('_ts', String(Date.now()));
   const connector = GAS_API_ENDPOINT.indexOf('?') >= 0 ? '&' : '?';
   const targetUrl = GAS_API_ENDPOINT + connector + params.toString();
-  const response = await fetch(targetUrl, { method: 'GET' });
-  const data = await response.json().catch(function() { return {}; });
-  if (!response.ok) {
-    throw new Error(data.error || '通信に失敗しました。');
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      cache: 'no-store'
+    });
+    const data = await response.json().catch(function() { return {}; });
+    if (!response.ok) {
+      throw new Error(data.error || '通信に失敗しました。');
+    }
+    if (data && data.error) {
+      throw new Error(data.error);
+    }
+    if (!data || typeof data !== 'object' || !data.summary) {
+      throw new Error('不正なレスポンスです。');
+    }
+    return data;
+  } catch (_error) {
+    return jsonpRequest(params);
   }
-  if (data && data.error) {
-    throw new Error(data.error);
-  }
-  return data;
+}
+
+function jsonpRequest(params) {
+  return new Promise(function(resolve, reject) {
+    const callbackName = 'mercariCb' + Date.now() + Math.floor(Math.random() * 100000);
+    const timeoutId = setTimeout(function() {
+      cleanup();
+      reject(new Error('通信がタイムアウトしました。'));
+    }, 15000);
+    const script = document.createElement('script');
+    const url = new URL(GAS_API_ENDPOINT);
+
+    params.forEach(function(value, key) {
+      url.searchParams.set(key, value);
+    });
+    url.searchParams.set('cb', callbackName);
+
+    function cleanup() {
+      clearTimeout(timeoutId);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      try {
+        delete window[callbackName];
+      } catch (_error) {
+        window[callbackName] = undefined;
+      }
+    }
+
+    window[callbackName] = function(data) {
+      cleanup();
+      if (!data || typeof data !== 'object') {
+        reject(new Error('不正なレスポンスです。'));
+        return;
+      }
+      if (data.error) {
+        reject(new Error(data.error));
+        return;
+      }
+      resolve(data);
+    };
+
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('通信に失敗しました。'));
+    };
+
+    script.src = url.toString();
+    document.head.appendChild(script);
+  });
 }
 
 async function runApi(fn) {
