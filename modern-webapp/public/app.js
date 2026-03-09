@@ -196,18 +196,14 @@ async function handleBulkAction(status, event) {
     setSelectionMode(status, !selectionMode[status]);
     return;
   }
-  if (action === 'select-all') {
+  if (action === 'toggle-select-all') {
     if (!selectionMode[status]) {
       setSelectionMode(status, true);
     }
-    setRowsSelected(status, true);
-    return;
-  }
-  if (action === 'clear-selection') {
-    if (!selectionMode[status]) {
-      setSelectionMode(status, true);
-    }
-    setRowsSelected(status, false);
+    const totalRows = Array.from(getBodyByStatus(status).querySelectorAll('tr[data-id]')).length;
+    const selectedCount = getSelectedRows(status).length;
+    const nextChecked = totalRows > 0 && selectedCount < totalRows;
+    setRowsSelected(status, nextChecked);
     return;
   }
 
@@ -281,7 +277,6 @@ async function handleBulkAction(status, event) {
     setSelectionMode('sold', false);
     setSelectionMode('unsold', false);
 
-    if (action === 'save') showToast('選択行を保存しました。');
     if (action === 'to-sold') showToast('選択行を販売済みに移動しました。');
     if (action === 'to-unsold') showToast('選択行を未販売在庫へ移動しました。');
     if (action === 'delete') showToast('選択行を削除しました。');
@@ -308,6 +303,7 @@ function setRowsSelected(status, checked) {
     checkbox.checked = checked;
   });
   updateSelectedCount(status);
+  updateSelectAllButtonLabel(status);
 }
 
 function updateSelectedCount(status) {
@@ -322,16 +318,24 @@ function setSelectionMode(status, enabled) {
   const panel = getPanelByStatus(status);
   if (panel) {
     panel.classList.toggle('selection-mode', enabled);
-    const toggleButton = panel.querySelector('[data-bulk-action="toggle-selection"]');
-    if (toggleButton) {
-      toggleButton.textContent = enabled ? '選択終了' : '選択';
-    }
   }
   if (!enabled) {
     setRowsSelected(status, false);
   } else {
     updateSelectedCount(status);
+    updateSelectAllButtonLabel(status);
   }
+}
+
+function updateSelectAllButtonLabel(status) {
+  const panel = getPanelByStatus(status);
+  if (!panel) return;
+  const button = panel.querySelector('[data-bulk-action="toggle-select-all"]');
+  if (!button) return;
+
+  const totalRows = Array.from(getBodyByStatus(status).querySelectorAll('tr[data-id]')).length;
+  const selectedCount = getSelectedRows(status).length;
+  button.textContent = totalRows > 0 && selectedCount === totalRows ? '解除' : '全選択';
 }
 
 function scheduleAutoSave(row, status) {
