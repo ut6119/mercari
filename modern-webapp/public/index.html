@@ -88,20 +88,20 @@
 
       .table-wrap { overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
       table { width: 100%; border-collapse: collapse; min-width: 0; table-layout: fixed; }
-      .compact-table .col-select { width: 0%; }
-      .compact-table .col-name { width: 29%; }
+      .compact-table .col-select { width: 1%; }
+      .compact-table .col-name { width: 27%; }
       .compact-table .col-revenue,
       .compact-table .col-shipping,
       .compact-table .col-cost,
       .compact-table .col-profit { width: 14%; }
-      .compact-table .col-rate { width: 15%; }
+      .compact-table .col-rate { width: 16%; }
       .selection-mode .compact-table .col-select { width: 7%; }
-      .selection-mode .compact-table .col-name { width: 26%; }
+      .selection-mode .compact-table .col-name { width: 24%; }
       .selection-mode .compact-table .col-revenue,
       .selection-mode .compact-table .col-shipping,
       .selection-mode .compact-table .col-cost,
-      .selection-mode .compact-table .col-profit { width: 13%; }
-      .selection-mode .compact-table .col-rate { width: 15%; }
+      .selection-mode .compact-table .col-profit { width: 14%; }
+      .selection-mode .compact-table .col-rate { width: 13%; }
       th, td {
         padding: 8px 5px;
         border-bottom: 1px solid #e8edf6;
@@ -129,11 +129,31 @@
         background: #fbfdff;
       }
       th.selection-col,
-      td.selection-cell { display: none; }
-      .selection-mode th.selection-col,
-      .selection-mode td.selection-cell { display: table-cell; }
+      td.selection-cell {
+        width: 0;
+        max-width: 0;
+        padding: 0;
+        border: 0;
+        opacity: 0;
+        pointer-events: none;
+        overflow: hidden;
+      }
       .selection-cell { text-align: center; }
-      .selection-cell input[type="checkbox"] { width: 16px; height: 16px; }
+      .selection-cell input[type="checkbox"] {
+        display: none;
+        width: 16px;
+        height: 16px;
+      }
+      .selection-mode th.selection-col,
+      .selection-mode td.selection-cell {
+        width: auto;
+        max-width: none;
+        padding: 8px 4px;
+        border-bottom: 1px solid #e8edf6;
+        opacity: 1;
+        pointer-events: auto;
+      }
+      .selection-mode .selection-cell input[type="checkbox"] { display: inline-block; }
       .money, .rate, .center { text-align: right; }
       .pill {
         display: inline-flex; align-items: center; justify-content: center; min-width: 58px;
