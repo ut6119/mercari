@@ -49,7 +49,7 @@
       }
       .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
       .title { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1; letter-spacing: -0.04em; }
-      .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+      .hero-note { margin-top: 8px; color: var(--muted); font-size: 13px; }
       .button, button {
         appearance: none; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700;
         cursor: pointer; transition: transform 120ms ease, opacity 120ms ease;
@@ -69,6 +69,33 @@
       .stat-label { font-size: 12px; color: var(--muted); }
       .stat-value { margin-top: 6px; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; letter-spacing: -0.05em; }
       .stat-note { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+      .view-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 14px;
+        background: #e7edf8;
+        border: 1px solid #d4deee;
+        border-radius: 14px;
+        padding: 6px;
+      }
+      .view-tab {
+        border-radius: 10px;
+        border: 0;
+        background: transparent;
+        color: #38455e;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 10px 12px;
+      }
+      .view-tab.active {
+        background: #ffffff;
+        color: #152033;
+        box-shadow: 0 2px 7px rgba(25, 40, 68, 0.12);
+      }
+      .view-pane { display: none; }
+      .view-pane.active { display: block; }
 
       .layout { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 18px; }
       .panel { padding: 20px; }
@@ -209,6 +236,10 @@
         flex-wrap: wrap;
         margin-bottom: 10px;
       }
+      .bulk-toolbar .history-buttons {
+        display: inline-flex;
+        gap: 6px;
+      }
       .bulk-button {
         padding: 7px 10px;
         font-size: 11px;
@@ -226,6 +257,90 @@
         padding: 5px 10px;
       }
       .hidden { display: none; }
+
+      .monthly-switch {
+        display: inline-flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      .monthly-button {
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid #c8d6ee;
+        background: #eef4ff;
+        color: #22457e;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .monthly-button.active {
+        background: #2467da;
+        border-color: #2467da;
+        color: #fff;
+      }
+      .monthly-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .monthly-metric {
+        border: 1px solid #d9e2f0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #fff;
+      }
+      .monthly-metric-label { color: var(--muted); font-size: 11px; }
+      .monthly-metric-value { margin-top: 5px; font-weight: 800; font-size: 20px; letter-spacing: -0.03em; }
+      .monthly-board + .monthly-board { margin-top: 12px; }
+      .monthly-board-title { margin: 0 0 8px; font-size: 16px; }
+      .monthly-empty { margin: 0; font-size: 12px; color: var(--muted); }
+
+      .chart-legend {
+        display: flex;
+        gap: 14px;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 10px;
+      }
+      .chart-legend-dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 5px;
+      }
+      .chart-group {
+        display: grid;
+        gap: 12px;
+      }
+      .chart-row {
+        display: grid;
+        grid-template-columns: 74px 1fr auto;
+        align-items: center;
+        gap: 10px;
+      }
+      .chart-label { font-size: 12px; font-weight: 700; color: #26324a; }
+      .chart-bars {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+      .chart-bar-track {
+        width: 100%;
+        height: 16px;
+        border-radius: 999px;
+        background: #edf2fb;
+        overflow: hidden;
+      }
+      .chart-bar {
+        height: 100%;
+        border-radius: 999px;
+      }
+      .chart-bar.revenue { background: linear-gradient(90deg, #2a7fff, #4a92ff); }
+      .chart-bar.profit { background: linear-gradient(90deg, #14b8a6, #21cfba); }
+      .chart-bar.profit.negative { background: linear-gradient(90deg, #c75268, #df768a); }
+      .chart-values { font-size: 12px; color: #3a475f; min-width: 150px; text-align: right; }
+
       .toast {
         position: fixed; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 14px;
         background: rgba(30, 35, 40, 0.92); color: #fff; font-size: 13px; opacity: 0;
@@ -238,8 +353,12 @@
         .hero, .panel { padding: 16px; }
         .hero-mascot { width: 76px; top: 6px; right: 6px; }
         .hero-top { flex-direction: column; }
+        .view-tab { font-size: 12px; padding: 9px 6px; }
         .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .monthly-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .chart-row { grid-template-columns: 56px 1fr; }
+        .chart-values { grid-column: 1 / -1; text-align: left; min-width: 0; }
         th, td { padding: 6px 4px; font-size: 10px; }
         td input { padding: 6px 5px; font-size: 10px; }
         .pill { min-width: 54px; padding: 4px 6px; font-size: 10px; }
@@ -254,11 +373,8 @@
         <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
         <div class="hero-top">
           <h1 class="title">メルカリ収支アプリ</h1>
-          <div class="hero-actions">
-            <button class="button button-secondary" id="refreshButton" type="button">再読込</button>
-            <button class="button button-secondary" id="archiveButton" type="button">前月をアーカイブ</button>
-          </div>
         </div>
+        <div class="hero-note">ホーム・月別・棒グラフで収支を切り替えて確認できます。</div>
 
         <div class="stats">
           <div class="stat">
@@ -284,114 +400,194 @@
         </div>
       </section>
 
-      <div class="layout">
-        <div class="boards">
-          <section class="panel sold-panel" id="soldPanel">
-            <div class="board-head">
-              <h3>販売済み</h3>
-              <div class="board-head-right">
-                <button class="button button-secondary board-head-action" id="soldUndoButton" type="button">戻る</button>
-                <button class="button button-secondary board-head-action" id="soldRedoButton" type="button">進む</button>
-                <span id="soldCountLabel">0件</span>
-              </div>
-            </div>
-            <div class="bulk-toolbar" id="soldToolbar">
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>
-              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="toggle-select-all">全選択</button>
-              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="to-unsold">未販へ</button>
-              <button class="button button-danger bulk-button bulk-only" type="button" data-bulk-action="delete">削除</button>
-              <span class="bulk-count bulk-only" id="soldSelectedCount">0件選択</span>
-            </div>
-            <div class="table-wrap">
-              <table class="compact-table">
-                <colgroup>
-                  <col class="col-select">
-                  <col class="col-name">
-                  <col class="col-revenue">
-                  <col class="col-shipping">
-                  <col class="col-cost">
-                  <col class="col-profit">
-                  <col class="col-rate">
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
-                  </tr>
-                </thead>
-                <tbody id="soldTableBody"></tbody>
-              </table>
-            </div>
-          </section>
+      <div class="view-tabs" id="viewTabs">
+        <button class="view-tab active" type="button" data-view-tab="home">ホーム</button>
+        <button class="view-tab" type="button" data-view-tab="monthly">月別</button>
+        <button class="view-tab" type="button" data-view-tab="chart">棒グラフ</button>
+      </div>
 
-          <section class="panel unsold-panel" id="unsoldPanel">
-            <div class="board-head">
-              <h3>未販売在庫</h3>
-              <div class="board-head-right">
-                <button class="button button-secondary board-head-action" id="unsoldUndoButton" type="button">戻る</button>
-                <button class="button button-secondary board-head-action" id="unsoldRedoButton" type="button">進む</button>
-                <span id="unsoldCountLabel">0件</span>
+      <section class="view-pane active" id="homeView">
+        <div class="layout">
+          <div class="boards">
+            <section class="panel sold-panel" id="soldPanel">
+              <div class="board-head">
+                <h3>販売済み</h3>
+                <div class="board-head-right">
+                  <button class="button button-secondary board-head-action" id="archiveButton" type="button">前月をアーカイブ</button>
+                  <span id="soldCountLabel">0件</span>
+                </div>
+              </div>
+              <div class="bulk-toolbar" id="soldToolbar">
+                <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>
+                <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="toggle-select-all">全選択</button>
+                <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="to-unsold">未販へ</button>
+                <button class="button button-danger bulk-button bulk-only" type="button" data-bulk-action="delete">削除</button>
+                <div class="history-buttons">
+                  <button class="button button-secondary bulk-button" id="soldUndoButton" type="button">戻る</button>
+                  <button class="button button-secondary bulk-button" id="soldRedoButton" type="button">進む</button>
+                </div>
+                <span class="bulk-count bulk-only" id="soldSelectedCount">0件選択</span>
+              </div>
+              <div class="table-wrap">
+                <table class="compact-table">
+                  <colgroup>
+                    <col class="col-select">
+                    <col class="col-name">
+                    <col class="col-revenue">
+                    <col class="col-shipping">
+                    <col class="col-cost">
+                    <col class="col-profit">
+                    <col class="col-rate">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
+                    </tr>
+                  </thead>
+                  <tbody id="soldTableBody"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel unsold-panel" id="unsoldPanel">
+              <div class="board-head">
+                <h3>未販売在庫</h3>
+                <div class="board-head-right">
+                  <span id="unsoldCountLabel">0件</span>
+                </div>
+              </div>
+              <div class="bulk-toolbar" id="unsoldToolbar">
+                <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>
+                <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="toggle-select-all">全選択</button>
+                <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="to-sold">販売済へ</button>
+                <button class="button button-danger bulk-button bulk-only" type="button" data-bulk-action="delete">削除</button>
+                <div class="history-buttons">
+                  <button class="button button-secondary bulk-button" id="unsoldUndoButton" type="button">戻る</button>
+                  <button class="button button-secondary bulk-button" id="unsoldRedoButton" type="button">進む</button>
+                </div>
+                <span class="bulk-count bulk-only" id="unsoldSelectedCount">0件選択</span>
+              </div>
+              <div class="table-wrap">
+                <table class="compact-table">
+                  <colgroup>
+                    <col class="col-select">
+                    <col class="col-name">
+                    <col class="col-revenue">
+                    <col class="col-shipping">
+                    <col class="col-cost">
+                    <col class="col-profit">
+                    <col class="col-rate">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
+                    </tr>
+                  </thead>
+                  <tbody id="unsoldTableBody"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel" id="quickAddPanel">
+            <h2>商品追加</h2>
+            <div class="segmented">
+              <button class="segment active" type="button" data-status-tab="unsold">未販売</button>
+              <button class="segment" type="button" data-status-tab="sold">販売済み</button>
+            </div>
+            <form id="quickAddForm" class="form-grid">
+              <div class="field">
+                <label for="nameInput">名前</label>
+                <input id="nameInput" name="name" type="text" placeholder="商品名">
+              </div>
+              <div class="field-row">
+                <div class="field" id="revenueField">
+                  <label for="revenueInput">売上</label>
+                  <input id="revenueInput" name="revenue" type="number" min="0" step="1" placeholder="0">
+                </div>
+                <div class="field">
+                  <label for="costInput">原価</label>
+                  <input id="costInput" name="cost" type="number" min="0" step="1" placeholder="0">
+                </div>
+              </div>
+              <div class="field">
+                <label for="shippingInput">送料</label>
+                <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
+              </div>
+              <button class="button button-primary" id="addButton" type="submit">追加する</button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="view-pane" id="monthlyView">
+        <div class="layout">
+          <section class="panel">
+            <h2>月別データ</h2>
+            <div class="monthly-switch" id="monthlySwitch"></div>
+            <div class="monthly-summary-grid" id="monthlySummaryGrid"></div>
+            <div class="monthly-board">
+              <h3 class="monthly-board-title">販売済み</h3>
+              <div class="table-wrap">
+                <table class="compact-table">
+                  <colgroup>
+                    <col class="col-name">
+                    <col class="col-revenue">
+                    <col class="col-shipping">
+                    <col class="col-cost">
+                    <col class="col-profit">
+                    <col class="col-rate">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
+                    </tr>
+                  </thead>
+                  <tbody id="monthlySoldBody"></tbody>
+                </table>
               </div>
             </div>
-            <div class="bulk-toolbar" id="unsoldToolbar">
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>
-              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="toggle-select-all">全選択</button>
-              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="to-sold">販売済へ</button>
-              <button class="button button-danger bulk-button bulk-only" type="button" data-bulk-action="delete">削除</button>
-              <span class="bulk-count bulk-only" id="unsoldSelectedCount">0件選択</span>
-            </div>
-            <div class="table-wrap">
-              <table class="compact-table">
-                <colgroup>
-                  <col class="col-select">
-                  <col class="col-name">
-                  <col class="col-revenue">
-                  <col class="col-shipping">
-                  <col class="col-cost">
-                  <col class="col-profit">
-                  <col class="col-rate">
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
-                  </tr>
-                </thead>
-                <tbody id="unsoldTableBody"></tbody>
-              </table>
+            <div class="monthly-board">
+              <h3 class="monthly-board-title">未販売在庫</h3>
+              <div class="table-wrap">
+                <table class="compact-table">
+                  <colgroup>
+                    <col class="col-name">
+                    <col class="col-revenue">
+                    <col class="col-shipping">
+                    <col class="col-cost">
+                    <col class="col-profit">
+                    <col class="col-rate">
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
+                    </tr>
+                  </thead>
+                  <tbody id="monthlyUnsoldBody"></tbody>
+                </table>
+              </div>
             </div>
           </section>
         </div>
+      </section>
 
-        <section class="panel" id="quickAddPanel">
-          <h2>商品追加</h2>
-          <div class="segmented">
-            <button class="segment active" type="button" data-status-tab="unsold">未販売</button>
-            <button class="segment" type="button" data-status-tab="sold">販売済み</button>
-          </div>
-          <form id="quickAddForm" class="form-grid">
-            <div class="field">
-              <label for="nameInput">名前</label>
-              <input id="nameInput" name="name" type="text" placeholder="商品名">
+      <section class="view-pane" id="chartView">
+        <div class="layout">
+          <section class="panel">
+            <h2>月別棒グラフ</h2>
+            <div class="chart-legend">
+              <span><span class="chart-legend-dot" style="background:#2a7fff;"></span>売上</span>
+              <span><span class="chart-legend-dot" style="background:#14b8a6;"></span>利益</span>
             </div>
-            <div class="field-row">
-              <div class="field" id="revenueField">
-                <label for="revenueInput">売上</label>
-                <input id="revenueInput" name="revenue" type="number" min="0" step="1" placeholder="0">
-              </div>
-              <div class="field">
-                <label for="costInput">原価</label>
-                <input id="costInput" name="cost" type="number" min="0" step="1" placeholder="0">
-              </div>
-            </div>
-            <div class="field">
-              <label for="shippingInput">送料</label>
-              <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
-            </div>
-            <button class="button button-primary" id="addButton" type="submit">追加する</button>
-          </form>
-        </section>
-      </div>
+            <div class="chart-group" id="monthlyChart"></div>
+          </section>
+        </div>
+      </section>
     </div>
     <div class="toast" id="toast"></div>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>

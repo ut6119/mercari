@@ -223,7 +223,14 @@ function openSpreadsheet_() {
 }
 
 function readItems_() {
-  const sheet = ensureSheet_();
+  return readItemsFromSheet_(ensureSheet_());
+}
+
+function readItemsFromSheet_(sheet) {
+  if (!sheet) {
+    return [];
+  }
+
   const lastRow = sheet.getLastRow();
   if (lastRow < DATA_START_ROW) {
     return [];
@@ -234,14 +241,16 @@ function readItems_() {
     return [];
   }
 
-  const values = sheet.getRange(DATA_START_ROW, 1, totalRows, META_STATUS_COLUMN).getValues();
+  const lastColumn = sheet.getLastColumn();
+  const readColumnCount = Math.max(VISIBLE_COLUMN_COUNT, Math.min(Math.max(lastColumn, VISIBLE_COLUMN_COUNT), META_STATUS_COLUMN));
+  const values = sheet.getRange(DATA_START_ROW, 1, totalRows, readColumnCount).getValues();
   const items = [];
   let separatorSeen = false;
 
   values.forEach(function(row) {
     const visible = row.slice(0, VISIBLE_COLUMN_COUNT);
-    const statusMeta = normalizeStatus_(row[META_STATUS_COLUMN - 1]);
-    const idMeta = String(row[META_ID_COLUMN - 1] || '').trim();
+    const statusMeta = normalizeStatus_(row.length >= META_STATUS_COLUMN ? row[META_STATUS_COLUMN - 1] : '');
+    const idMeta = String(row.length >= META_ID_COLUMN ? row[META_ID_COLUMN - 1] : '').trim();
 
     if (isRowCompletelyEmpty_(visible)) {
       if (items.length > 0) {
@@ -294,6 +303,37 @@ function readItems_() {
   return items.filter(function(item) {
     return item.name || item.revenue || item.cost;
   });
+}
+
+function getMonthlySheetsData_() {
+  const ss = openSpreadsheet_();
+  const monthNamePattern = /^\d{4}-\d{2}$/;
+  const months = ss.getSheets()
+    .map(function(sheet) { return sheet.getName(); })
+    .filter(function(name) { return monthNamePattern.test(name); })
+    .sort();
+
+  const monthData = months.map(function(monthName) {
+    const sheet = ss.getSheetByName(monthName);
+    const items = readItemsFromSheet_(sheet);
+    const soldItems = items
+      .filter(function(item) { return item.status === 'sold'; })
+      .map(enrichItem_);
+    const unsoldItems = items
+      .filter(function(item) { return item.status === 'unsold'; })
+      .map(enrichItem_);
+    return {
+      month: monthName,
+      summary: buildSummary_(soldItems, unsoldItems),
+      soldItems: soldItems,
+      unsoldItems: unsoldItems
+    };
+  });
+
+  return {
+    months: monthData,
+    generatedAt: Utilities.formatDate(new Date(), APP_TIMEZONE, 'yyyy/MM/dd HH:mm:ss')
+  };
 }
 
 function writeSheetFromItems_(items, targetSheet) {
@@ -727,6 +767,10 @@ function parseApiGetPayload_(e) {
     return { action: 'dashboard' };
   }
 
+  if (action === 'monthly') {
+    return { action: 'monthly' };
+  }
+
   throw new Error('Unknown action: ' + action);
 }
 
@@ -766,6 +810,10 @@ function runApiAction_(payload) {
 
   if (action === 'dashboard') {
     return getDashboardData_();
+  }
+
+  if (action === 'monthly') {
+    return getMonthlySheetsData_();
   }
 
   if (action === 'save') {

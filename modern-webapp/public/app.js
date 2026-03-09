@@ -18,6 +18,10 @@ let backendMode = 'gas';
 let firebaseDb = null;
 let firebaseItemsCollection = null;
 let firebaseItemsCache = [];
+const monthlyState = {
+  months: [],
+  selectedMonth: ''
+};
 
 const soldProfitValue = document.getElementById('soldProfitValue');
 const soldProfitNote = document.getElementById('soldProfitNote');
@@ -39,11 +43,19 @@ const unsoldToolbar = document.getElementById('unsoldToolbar');
 const quickAddForm = document.getElementById('quickAddForm');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
+const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
+const homeView = document.getElementById('homeView');
+const monthlyView = document.getElementById('monthlyView');
+const chartView = document.getElementById('chartView');
+const monthlySwitch = document.getElementById('monthlySwitch');
+const monthlySummaryGrid = document.getElementById('monthlySummaryGrid');
+const monthlySoldBody = document.getElementById('monthlySoldBody');
+const monthlyUnsoldBody = document.getElementById('monthlyUnsoldBody');
+const monthlyChart = document.getElementById('monthlyChart');
 const soldUndoButton = document.getElementById('soldUndoButton');
 const soldRedoButton = document.getElementById('soldRedoButton');
 const unsoldUndoButton = document.getElementById('unsoldUndoButton');
 const unsoldRedoButton = document.getElementById('unsoldRedoButton');
-const refreshButton = document.getElementById('refreshButton');
 const archiveButton = document.getElementById('archiveButton');
 const addButton = document.getElementById('addButton');
 const toast = document.getElementById('toast');
@@ -64,8 +76,10 @@ async function init() {
   setupHeroMascot_();
   await initializeBackend();
   bindEvents();
+  activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
   await reloadData('最新状態を読み込みました。');
+  await loadMonthlyData_();
 }
 
 function setupHeroMascot_() {
@@ -81,6 +95,16 @@ function setupHeroMascot_() {
   heroMascot.onerror = function() {
     heroMascot.style.display = 'none';
   };
+}
+
+function activateView_(viewName) {
+  const target = String(viewName || '').trim().toLowerCase() || 'home';
+  viewTabs.forEach(function(button) {
+    button.classList.toggle('active', button.dataset.viewTab === target);
+  });
+  if (homeView) homeView.classList.toggle('active', target === 'home');
+  if (monthlyView) monthlyView.classList.toggle('active', target === 'monthly');
+  if (chartView) chartView.classList.toggle('active', target === 'chart');
 }
 
 async function initializeBackend() {
@@ -116,6 +140,17 @@ async function initializeBackend() {
 }
 
 function bindEvents() {
+  viewTabs.forEach(function(button) {
+    button.addEventListener('click', function() {
+      const target = String(button.dataset.viewTab || '').trim();
+      if (!target) return;
+      activateView_(target);
+      if ((target === 'monthly' || target === 'chart') && monthlyState.months.length === 0) {
+        void loadMonthlyData_();
+      }
+    });
+  });
+
   document.querySelectorAll('[data-status-tab]').forEach(function(button) {
     button.addEventListener('click', function() {
       draftStatus = button.dataset.statusTab;
@@ -126,10 +161,6 @@ function bindEvents() {
         shippingInput.value = '160';
       }
     });
-  });
-
-  refreshButton.addEventListener('click', function() {
-    reloadData('最新状態を読み込みました。');
   });
 
   [soldUndoButton, unsoldUndoButton].forEach(function(button) {
@@ -153,6 +184,7 @@ function bindEvents() {
     await runApi(async function() {
       const data = await request('/api/archive', { method: 'POST' });
       render(data);
+      await loadMonthlyData_({ silent: true });
       showToast('前月アーカイブが完了しました。');
     });
   });
@@ -211,6 +243,17 @@ function bindEvents() {
       scheduleAutoSave(row, 'unsold');
     }
   });
+
+  if (monthlySwitch) {
+    monthlySwitch.addEventListener('click', function(event) {
+      const button = event.target.closest('button[data-month]');
+      if (!button) return;
+      const month = String(button.dataset.month || '').trim();
+      if (!month) return;
+      monthlyState.selectedMonth = month;
+      renderMonthlyViews_();
+    });
+  }
 }
 
 function readRowPayload(row, status) {
@@ -586,6 +629,36 @@ async function request(url, options) {
   }
 
   const params = convertRequestToGasParams_(url, options);
+  return requestFromGasParams_(params, { requireSummary: true });
+}
+
+async function loadMonthlyData_(options) {
+  const opts = options || {};
+  try {
+    const params = new URLSearchParams();
+    params.set('api', 'monthly');
+    params.set('_ts', String(Date.now()));
+    const data = await requestFromGasParams_(params, { requireSummary: false });
+    const months = Array.isArray(data && data.months) ? data.months : [];
+    monthlyState.months = months;
+    if (!months.length) {
+      monthlyState.selectedMonth = '';
+    } else if (!months.some(function(entry) { return entry.month === monthlyState.selectedMonth; })) {
+      monthlyState.selectedMonth = months[months.length - 1].month;
+    }
+    renderMonthlyViews_();
+  } catch (error) {
+    monthlyState.months = [];
+    monthlyState.selectedMonth = '';
+    renderMonthlyViews_();
+    if (!opts.silent) {
+      showToast(error.message || '月別データの取得に失敗しました。');
+    }
+  }
+}
+
+async function requestFromGasParams_(params, options) {
+  const opts = options || {};
   const connector = GAS_API_ENDPOINT.indexOf('?') >= 0 ? '&' : '?';
   const targetUrl = GAS_API_ENDPOINT + connector + params.toString();
 
@@ -602,12 +675,19 @@ async function request(url, options) {
     if (data && data.error) {
       throw new Error(data.error);
     }
-    if (!data || typeof data !== 'object' || !data.summary) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('不正なレスポンスです。');
+    }
+    if (opts.requireSummary && !data.summary) {
       throw new Error('不正なレスポンスです。');
     }
     return data;
   } catch (_error) {
-    return jsonpRequest(params);
+    const data = await jsonpRequest(params);
+    if (opts.requireSummary && (!data || !data.summary)) {
+      throw new Error('不正なレスポンスです。');
+    }
+    return data;
   }
 }
 
@@ -1022,7 +1102,11 @@ async function runApi(fn) {
 
 function togglePending(isPending) {
   const bulkButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
-  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, refreshButton, archiveButton, addButton].concat(bulkButtons).forEach(function(button) {
+  const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton]
+    .concat(viewTabs, bulkButtons, monthButtons)
+    .forEach(function(button) {
+    if (!button) return;
     button.disabled = isPending;
   });
   if (!isPending) {
@@ -1062,6 +1146,103 @@ function render(data, options) {
   setSelectionMode('sold', selectionMode.sold);
   setSelectionMode('unsold', selectionMode.unsold);
   updateHistoryButtons_();
+}
+
+function renderMonthlyViews_() {
+  if (!monthlySwitch || !monthlySummaryGrid || !monthlySoldBody || !monthlyUnsoldBody || !monthlyChart) {
+    return;
+  }
+
+  const months = monthlyState.months;
+  if (!months.length) {
+    monthlySwitch.innerHTML = '<span class="monthly-empty">月別シートがありません。</span>';
+    monthlySummaryGrid.innerHTML = '';
+    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">データがありません。</td></tr>';
+    monthlyUnsoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">データがありません。</td></tr>';
+    monthlyChart.innerHTML = '<p class="monthly-empty">データがありません。</p>';
+    return;
+  }
+
+  monthlySwitch.innerHTML = months.map(function(entry) {
+    const month = String(entry.month || '');
+    const active = month === monthlyState.selectedMonth;
+    return '<button class="monthly-button' + (active ? ' active' : '') + '" type="button" data-month="' + escapeHtml(month) + '">' + escapeHtml(month) + '</button>';
+  }).join('');
+
+  const selected = months.find(function(entry) {
+    return entry.month === monthlyState.selectedMonth;
+  }) || months[0];
+
+  const summary = selected.summary || {};
+  monthlySummaryGrid.innerHTML = [
+    ['販売済み利益', formatSignedYen(summary.soldProfit)],
+    ['未販売在庫', formatYen(summary.unsoldCost)],
+    ['合計収支', formatSignedYen(summary.overallNet)],
+    ['売上合計', formatYen(summary.soldRevenue)]
+  ].map(function(metric) {
+    return '<div class="monthly-metric"><div class="monthly-metric-label">' + metric[0] + '</div><div class="monthly-metric-value">' + metric[1] + '</div></div>';
+  }).join('');
+
+  const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
+  const unsoldItems = Array.isArray(selected.unsoldItems) ? selected.unsoldItems : [];
+  monthlySoldBody.innerHTML = soldItems.length
+    ? soldItems.map(renderMonthlyRow_).join('')
+    : '<tr class="table-empty"><td colspan="6">販売済みデータはありません。</td></tr>';
+  monthlyUnsoldBody.innerHTML = unsoldItems.length
+    ? unsoldItems.map(renderMonthlyRow_).join('')
+    : '<tr class="table-empty"><td colspan="6">未販売在庫データはありません。</td></tr>';
+
+  renderMonthlyChart_();
+}
+
+function renderMonthlyChart_() {
+  if (!monthlyChart) return;
+  const months = monthlyState.months;
+  if (!months.length) {
+    monthlyChart.innerHTML = '<p class="monthly-empty">データがありません。</p>';
+    return;
+  }
+
+  const maxValue = months.reduce(function(max, entry) {
+    const summary = entry.summary || {};
+    return Math.max(max, sanitizeAmount_(summary.soldRevenue), Math.abs(Number(summary.soldProfit || 0)));
+  }, 1);
+
+  monthlyChart.innerHTML = months.map(function(entry) {
+    const summary = entry.summary || {};
+    const soldRevenue = sanitizeAmount_(summary.soldRevenue);
+    const soldProfit = Number(summary.soldProfit || 0);
+    const revenueWidth = Math.max(4, Math.round((soldRevenue / maxValue) * 100));
+    const profitWidth = Math.max(4, Math.round((Math.abs(soldProfit) / maxValue) * 100));
+    const profitClass = soldProfit < 0 ? 'chart-bar profit negative' : 'chart-bar profit';
+    return ''
+      + '<div class="chart-row">'
+      + '  <div class="chart-label">' + escapeHtml(entry.month || '-') + '</div>'
+      + '  <div class="chart-bars">'
+      + '    <div class="chart-bar-track"><div class="chart-bar revenue" style="width:' + revenueWidth + '%;"></div></div>'
+      + '    <div class="chart-bar-track"><div class="' + profitClass + '" style="width:' + profitWidth + '%;"></div></div>'
+      + '  </div>'
+      + '  <div class="chart-values">売上 ' + formatYen(soldRevenue) + ' / 利益 ' + formatSignedYen(soldProfit) + '</div>'
+      + '</div>';
+  }).join('');
+}
+
+function renderMonthlyRow_(item) {
+  const margin = (item && typeof item.margin !== 'undefined') ? item.margin : null;
+  const rateClass = margin < 0 ? 'bad' : (margin >= 0.2 ? 'good' : 'neutral');
+  const revenue = sanitizeAmount_(item.revenue);
+  const shipping = sanitizeAmount_(item.shipping, DEFAULT_SHIPPING);
+  const cost = sanitizeAmount_(item.cost);
+  const profit = Number(item.profit || 0);
+  return ''
+    + '<tr>'
+    + '  <td>' + escapeHtml(item.name || '') + '</td>'
+    + '  <td class="money">' + formatYen(revenue) + '</td>'
+    + '  <td class="money">' + formatYen(shipping) + '</td>'
+    + '  <td class="money">' + formatYen(cost) + '</td>'
+    + '  <td class="money">' + formatSignedYen(profit) + '</td>'
+    + '  <td class="rate"><span class="pill ' + rateClass + '">' + formatPercent(margin) + '</span></td>'
+    + '</tr>';
 }
 
 function renderSoldRow(item) {
