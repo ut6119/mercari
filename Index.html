@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <style>
+      :root {
+        --bg: #f3f0e8;
+        --panel: #fffdf8;
+        --panel-strong: #ffffff;
+        --line: #d7d1c7;
+        --text: #1e2328;
+        --muted: #6f746e;
+        --accent: #1f6a52;
+        --accent-soft: #dbe9e1;
+        --warm: #c37f2d;
+        --warm-soft: #f8e9d2;
+        --danger: #9f3f3f;
+        --danger-soft: #f6dddd;
+        --shadow: 0 18px 40px rgba(30, 35, 40, 0.08);
+        --radius: 18px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(31, 106, 82, 0.12), transparent 28%),
+          radial-gradient(circle at top right, rgba(195, 127, 45, 0.14), transparent 32%),
+          var(--bg);
+      }
+
+      .shell {
+        width: min(1280px, calc(100vw - 24px));
+        margin: 24px auto 40px;
+      }
+
+      .hero,
+      .panel {
+        background: rgba(255, 253, 248, 0.94);
+        border: 1px solid rgba(215, 209, 199, 0.8);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        padding: 24px;
+      }
+
+      .hero-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: flex-start;
+      }
+
+      .title {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 40px);
+        line-height: 1;
+        letter-spacing: -0.04em;
+      }
+
+      .subtitle {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .button,
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 120ms ease, opacity 120ms ease, background 120ms ease;
+      }
+
+      .button:hover,
+      button:hover {
+        transform: translateY(-1px);
+      }
+
+      .button:disabled,
+      button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+        transform: none;
+      }
+
+      .button-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .button-secondary {
+        background: #e7e1d8;
+        color: var(--text);
+      }
+
+      .button-danger {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .stats {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .stat {
+        padding: 14px;
+        border-radius: 14px;
+        background: var(--panel-strong);
+        border: 1px solid rgba(215, 209, 199, 0.8);
+      }
+
+      .stat-label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .stat-value {
+        margin-top: 6px;
+        font-size: clamp(20px, 2.2vw, 30px);
+        font-weight: 800;
+        letter-spacing: -0.05em;
+      }
+
+      .stat-note {
+        margin-top: 4px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .stat-profit {
+        background: linear-gradient(135deg, #ffffff, #eef6f1);
+      }
+
+      .stat-stock {
+        background: linear-gradient(135deg, #fffef9, #fff1d9);
+      }
+
+      .stat-overall {
+        background: linear-gradient(135deg, #ffffff, #f7ecec);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      .panel h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+
+      .panel p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .segmented {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 6px;
+        background: #ece7df;
+        border-radius: 999px;
+        margin-top: 18px;
+      }
+
+      .segment {
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .segment.active {
+        background: #fff;
+        color: var(--text);
+      }
+
+      .form-grid {
+        display: grid;
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .field label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font: inherit;
+        background: #fff;
+      }
+
+      .field-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .hint {
+        margin-top: 12px;
+        padding: 14px;
+        border-radius: 14px;
+        background: #f7f2eb;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      .boards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        order: 1;
+        align-items: start;
+      }
+
+      #quickAddPanel {
+        order: 2;
+      }
+
+      .board-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .board-head h3 {
+        margin: 0;
+        font-size: 19px;
+      }
+
+      .board-head span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .table-wrap {
+        overflow: auto;
+        max-height: min(58vh, 640px);
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        background: #fff;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 980px;
+      }
+
+      th,
+      td {
+        padding: 12px 10px;
+        border-bottom: 1px solid #ece7df;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 13px;
+      }
+
+      th {
+        position: sticky;
+        top: 0;
+        background: #23272d;
+        color: #fff;
+        font-size: 12px;
+        letter-spacing: 0.02em;
+        z-index: 1;
+      }
+
+      td.actions {
+        white-space: nowrap;
+      }
+
+      td input {
+        min-width: 90px;
+        padding: 10px 12px;
+      }
+
+      .money,
+      .rate,
+      .center {
+        text-align: right;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 82px;
+        padding: 7px 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .pill.good {
+        background: #d9ead3;
+        color: #1d5e2d;
+      }
+
+      .pill.bad {
+        background: #f4cccc;
+        color: #8f3030;
+      }
+
+      .pill.neutral {
+        background: #ece7df;
+        color: #595f5a;
+      }
+
+      .row-sold-good {
+        background: #f5fbf6;
+      }
+
+      .row-sold-bad {
+        background: #fff5f5;
+      }
+
+      .row-unsold {
+        background: #fffaf0;
+      }
+
+      .inline-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .mini {
+        padding: 10px 12px;
+        font-size: 12px;
+      }
+
+      .toast {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background: rgba(30, 35, 40, 0.92);
+        color: #fff;
+        font-size: 13px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(10px);
+        transition: opacity 140ms ease, transform 140ms ease;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 1080px) {
+        .boards {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          width: min(100vw - 12px, 100%);
+          margin: 12px auto 28px;
+        }
+
+        .hero,
+        .panel {
+          padding: 16px;
+        }
+
+        .hero-top {
+          flex-direction: column;
+        }
+
+        .field-row {
+          grid-template-columns: 1fr;
+        }
+
+        .stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        table {
+          min-width: 0;
+          table-layout: fixed;
+        }
+
+        thead {
+          display: none;
+        }
+
+        tbody,
+        tr,
+        td {
+          display: block;
+          width: 100%;
+        }
+
+        tr {
+          background: #fff;
+          border: 1px solid var(--line);
+          border-radius: 12px;
+          margin-bottom: 10px;
+          padding: 2px 8px;
+        }
+
+        th,
+        td {
+          padding: 8px 6px;
+          font-size: 11px;
+          border-bottom: 1px solid #ece7df;
+        }
+
+        td::before {
+          content: attr(data-label);
+          display: block;
+          color: var(--muted);
+          font-size: 10px;
+          margin-bottom: 4px;
+          line-height: 1.2;
+        }
+
+        td:last-child {
+          border-bottom: 0;
+        }
+
+        td input {
+          min-width: 0;
+          padding: 8px 8px;
+        }
+
+        td.actions {
+          white-space: normal;
+        }
+
+        .table-empty td {
+          border-bottom: 0;
+        }
+
+        .table-empty td::before {
+          content: "";
+          margin: 0;
+        }
+
+        .inline-actions {
+          flex-direction: column;
+          gap: 6px;
+          width: 100%;
+        }
+
+        .mini {
+          width: 100%;
+          padding: 7px 8px;
+          font-size: 11px;
+        }
+
+        .board-head h3 {
+          font-size: 17px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <div class="hero-top">
+          <div>
+            <h1 class="title">メルカリ収支アプリ</h1>
+          </div>
+          <div class="hero-actions">
+            <button class="button button-secondary" id="refreshButton" type="button">再読込</button>
+            <button class="button button-secondary" id="archiveButton" type="button">前月をアーカイブ</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat stat-profit">
+            <div class="stat-label">販売済み利益</div>
+            <div class="stat-value" id="soldProfitValue">¥0</div>
+            <div class="stat-note" id="soldProfitNote">0件 / 利益率 0.0%</div>
+          </div>
+          <div class="stat stat-stock">
+            <div class="stat-label">未販売在庫</div>
+            <div class="stat-value" id="unsoldCostValue">¥0</div>
+            <div class="stat-note" id="unsoldCostNote">0件 / 現在の投資額</div>
+          </div>
+          <div class="stat stat-overall">
+            <div class="stat-label">販売前後の合計収支</div>
+            <div class="stat-value" id="overallNetValue">¥0</div>
+            <div class="stat-note">販売済み利益 - 未販売在庫原価</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">売上合計</div>
+            <div class="stat-value" id="soldRevenueValue">¥0</div>
+            <div class="stat-note" id="lastUpdatedValue">最終更新 -</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="layout">
+        <div class="boards">
+          <section class="panel">
+            <div class="board-head">
+              <h3>販売済み</h3>
+              <span id="soldCountLabel">0件</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>名前</th>
+                    <th class="center">売上</th>
+                    <th class="center">手数料</th>
+                    <th class="center">送料</th>
+                    <th class="center">原価</th>
+                    <th class="center">利益</th>
+                    <th class="center">利益率</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="soldTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="board-head">
+              <h3>未販売在庫</h3>
+              <span id="unsoldCountLabel">0件</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>名前</th>
+                    <th class="center">売上</th>
+                    <th class="center">手数料</th>
+                    <th class="center">送料</th>
+                    <th class="center">原価</th>
+                    <th class="center">利益</th>
+                    <th class="center">利益率</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="unsoldTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" id="quickAddPanel">
+          <h2>商品追加</h2>
+          <p>未販売在庫も販売済みもここから追加できます。</p>
+
+          <div class="segmented">
+            <button class="segment active" type="button" data-status-tab="unsold">未販売</button>
+            <button class="segment" type="button" data-status-tab="sold">販売済み</button>
+          </div>
+
+          <form id="quickAddForm" class="form-grid">
+            <div class="field">
+              <label for="nameInput">名前</label>
+              <input id="nameInput" name="name" type="text" placeholder="商品名">
+            </div>
+
+            <div class="field-row">
+              <div class="field" id="revenueField">
+                <label for="revenueInput">売上</label>
+                <input id="revenueInput" name="revenue" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="costInput">原価</label>
+                <input id="costInput" name="cost" type="number" min="0" step="1" placeholder="0">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="shippingInput">送料</label>
+              <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
+            </div>
+
+            <button class="button button-primary" id="addButton" type="submit">追加する</button>
+          </form>
+
+          <div class="hint">
+            未販売で追加すると在庫欄に入り、販売済みで追加すると利益計算まで自動反映します。<br>
+            未販売行は一覧から売上を入れて「販売済みにする」で移動できます。
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+      const INITIAL_DATA = <?!= initialDataJson ?>;
+      let currentData = INITIAL_DATA;
+      let draftStatus = 'unsold';
+      let pending = false;
+
+      const soldProfitValue = document.getElementById('soldProfitValue');
+      const soldProfitNote = document.getElementById('soldProfitNote');
+      const unsoldCostValue = document.getElementById('unsoldCostValue');
+      const unsoldCostNote = document.getElementById('unsoldCostNote');
+      const overallNetValue = document.getElementById('overallNetValue');
+      const soldRevenueValue = document.getElementById('soldRevenueValue');
+      const lastUpdatedValue = document.getElementById('lastUpdatedValue');
+      const soldCountLabel = document.getElementById('soldCountLabel');
+      const unsoldCountLabel = document.getElementById('unsoldCountLabel');
+      const soldTableBody = document.getElementById('soldTableBody');
+      const unsoldTableBody = document.getElementById('unsoldTableBody');
+      const quickAddForm = document.getElementById('quickAddForm');
+      const revenueField = document.getElementById('revenueField');
+      const revenueInput = document.getElementById('revenueInput');
+      const shippingInput = document.getElementById('shippingInput');
+      const refreshButton = document.getElementById('refreshButton');
+      const archiveButton = document.getElementById('archiveButton');
+      const addButton = document.getElementById('addButton');
+      const toast = document.getElementById('toast');
+
+      render(currentData);
+      bindEvents();
+      document.querySelector('[data-status-tab="unsold"]').click();
+
+      function bindEvents() {
+        document.querySelectorAll('[data-status-tab]').forEach(function(button) {
+          button.addEventListener('click', function() {
+            draftStatus = button.dataset.statusTab;
+            document.querySelectorAll('[data-status-tab]').forEach(function(tab) {
+              tab.classList.toggle('active', tab === button);
+            });
+            revenueField.classList.toggle('hidden', draftStatus !== 'sold');
+            shippingInput.value = draftStatus === 'sold' ? '160' : '';
+          });
+        });
+
+        quickAddForm.addEventListener('submit', function(event) {
+          event.preventDefault();
+
+          const payload = {
+            status: draftStatus,
+            name: quickAddForm.name.value.trim(),
+            revenue: revenueInput.value,
+            shipping: shippingInput.value,
+            cost: quickAddForm.cost.value
+          };
+
+          runServer('saveItem', [payload], function(data) {
+            quickAddForm.reset();
+            draftStatus = 'unsold';
+            document.querySelector('[data-status-tab="unsold"]').click();
+            render(data);
+            showToast('商品を追加しました。');
+          });
+        });
+
+        refreshButton.addEventListener('click', function() {
+          runServer('getDashboardData', [], function(data) {
+            render(data);
+            showToast('最新状態を読み込みました。');
+          });
+        });
+
+        archiveButton.addEventListener('click', function() {
+          if (!window.confirm('前月をアーカイブして、販売済みだけを別シートへ移します。未販売在庫はこのシートに残します。')) {
+            return;
+          }
+          runServer('archiveMonthlyData', [], function(data) {
+            render(data);
+            showToast('前月アーカイブが完了しました。');
+          });
+        });
+
+        soldTableBody.addEventListener('click', handleSoldTableClick);
+        unsoldTableBody.addEventListener('click', handleUnsoldTableClick);
+      }
+
+      function handleSoldTableClick(event) {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const row = button.closest('tr');
+        const id = row.dataset.id;
+        const action = button.dataset.action;
+
+        if (action === 'delete') {
+          if (!window.confirm('この商品を削除しますか？')) return;
+          runServer('deleteItem', [id], function(data) {
+            render(data);
+            showToast('商品を削除しました。');
+          });
+          return;
+        }
+
+        if (action === 'unsold') {
+          const payload = readSoldRowPayload(row, 'unsold');
+          payload.revenue = '';
+          runServer('saveItem', [payload], function(data) {
+            render(data);
+            showToast('未販売在庫へ戻しました。');
+          });
+          return;
+        }
+
+        const payload = readSoldRowPayload(row, 'sold');
+        runServer('saveItem', [payload], function(data) {
+          render(data);
+          showToast('販売済み行を保存しました。');
+        });
+      }
+
+      function handleUnsoldTableClick(event) {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const row = button.closest('tr');
+        const id = row.dataset.id;
+        const action = button.dataset.action;
+
+        if (action === 'delete') {
+          if (!window.confirm('この商品を削除しますか？')) return;
+          runServer('deleteItem', [id], function(data) {
+            render(data);
+            showToast('商品を削除しました。');
+          });
+          return;
+        }
+
+        if (action === 'sell') {
+          const payload = {
+            id: id,
+            status: 'sold',
+            name: row.querySelector('[data-field="name"]').value.trim(),
+            revenue: row.querySelector('[data-field="revenue"]').value,
+            shipping: row.querySelector('[data-field="shipping"]').value,
+            cost: row.querySelector('[data-field="cost"]').value
+          };
+          runServer('saveItem', [payload], function(data) {
+            render(data);
+            showToast('販売済みに移動しました。');
+          });
+          return;
+        }
+
+        const payload = {
+          id: id,
+          status: 'unsold',
+          name: row.querySelector('[data-field="name"]').value.trim(),
+          revenue: '',
+          shipping: row.querySelector('[data-field="shipping"]').value,
+          cost: row.querySelector('[data-field="cost"]').value
+        };
+        runServer('saveItem', [payload], function(data) {
+          render(data);
+          showToast('未販売行を保存しました。');
+        });
+      }
+
+      function readSoldRowPayload(row, status) {
+        return {
+          id: row.dataset.id,
+          status: status,
+          name: row.querySelector('[data-field="name"]').value.trim(),
+          revenue: row.querySelector('[data-field="revenue"]').value,
+          shipping: row.querySelector('[data-field="shipping"]').value,
+          cost: row.querySelector('[data-field="cost"]').value
+        };
+      }
+
+      function runServer(functionName, args, onSuccess) {
+        if (pending) return;
+        pending = true;
+        togglePending(true);
+
+        const runner = google.script.run
+          .withSuccessHandler(function(result) {
+            pending = false;
+            togglePending(false);
+            onSuccess(result);
+          })
+          .withFailureHandler(function(error) {
+            pending = false;
+            togglePending(false);
+            showToast(error.message || '処理に失敗しました。');
+          });
+
+        runner[functionName].apply(runner, args);
+      }
+
+      function togglePending(isPending) {
+        [refreshButton, archiveButton, addButton].forEach(function(button) {
+          button.disabled = isPending;
+        });
+      }
+
+      function render(data) {
+        currentData = data;
+        const summary = data.summary;
+
+        soldProfitValue.textContent = formatYen(summary.soldProfit);
+        soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
+        unsoldCostValue.textContent = formatYen(summary.unsoldCost);
+        unsoldCostNote.textContent = summary.unsoldCount + '件 / 現在の投資額';
+        overallNetValue.textContent = formatSignedYen(summary.overallNet);
+        overallNetValue.style.color = summary.overallNet < 0 ? '#9f3f3f' : '#1f6a52';
+        soldRevenueValue.textContent = formatYen(summary.soldRevenue);
+        lastUpdatedValue.textContent = '最終更新 ' + data.lastUpdated;
+        soldCountLabel.textContent = summary.soldCount + '件';
+        unsoldCountLabel.textContent = summary.unsoldCount + '件';
+
+        soldTableBody.innerHTML = data.soldItems.length
+          ? data.soldItems.map(renderSoldRow).join('')
+          : '<tr class="table-empty"><td colspan="8" data-label="">販売済み商品はまだありません。</td></tr>';
+
+        unsoldTableBody.innerHTML = data.unsoldItems.length
+          ? data.unsoldItems.map(renderUnsoldRow).join('')
+          : '<tr class="table-empty"><td colspan="8" data-label="">未販売在庫はまだありません。</td></tr>';
+      }
+
+      function renderSoldRow(item) {
+        const rowClass = item.profit < 0 || item.margin < 0 ? 'row-sold-bad' : (item.margin >= 0.2 ? 'row-sold-good' : '');
+        const rateClass = item.margin < 0 ? 'bad' : (item.margin >= 0.2 ? 'good' : 'neutral');
+
+        return `
+          <tr class="${rowClass}" data-id="${escapeHtml(item.id)}">
+            <td data-label="名前"><input data-field="name" value="${escapeHtml(item.name)}"></td>
+            <td data-label="売上"><input data-field="revenue" type="number" min="0" step="1" value="${escapeHtml(String(item.revenue || ''))}"></td>
+            <td data-label="手数料" class="money">${formatYen(item.fee)}</td>
+            <td data-label="送料"><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String(item.shipping || 0))}"></td>
+            <td data-label="原価"><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
+            <td data-label="利益" class="money">${formatSignedYen(item.profit)}</td>
+            <td data-label="利益率" class="rate"><span class="pill ${rateClass}">${formatPercent(item.margin)}</span></td>
+            <td data-label="操作" class="actions">
+              <div class="inline-actions">
+                <button class="button button-primary mini" type="button" data-action="save">保存</button>
+                <button class="button button-secondary mini" type="button" data-action="unsold">未販売へ</button>
+                <button class="button button-danger mini" type="button" data-action="delete">削除</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+
+      function renderUnsoldRow(item) {
+        return `
+          <tr class="row-unsold" data-id="${escapeHtml(item.id)}">
+            <td data-label="名前"><input data-field="name" value="${escapeHtml(item.name)}"></td>
+            <td data-label="売上"><input data-field="revenue" type="number" min="0" step="1" placeholder="売れたら入力"></td>
+            <td data-label="手数料" class="money">${formatYen(0)}</td>
+            <td data-label="送料"><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String(item.shipping || ''))}"></td>
+            <td data-label="原価"><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
+            <td data-label="利益" class="money">${formatSignedYen(item.profit)}</td>
+            <td data-label="利益率" class="rate"><span class="pill neutral">--</span></td>
+            <td data-label="操作" class="actions">
+              <div class="inline-actions">
+                <button class="button button-secondary mini" type="button" data-action="save">保存</button>
+                <button class="button button-primary mini" type="button" data-action="sell">販売済みにする</button>
+                <button class="button button-danger mini" type="button" data-action="delete">削除</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }
+
+      function formatYen(value) {
+        return new Intl.NumberFormat('ja-JP', {
+          style: 'currency',
+          currency: 'JPY',
+          maximumFractionDigits: 0
+        }).format(value || 0);
+      }
+
+      function formatSignedYen(value) {
+        const number = Number(value || 0);
+        return number < 0 ? '-' + formatYen(Math.abs(number)) : formatYen(number);
+      }
+
+      function formatPercent(value) {
+        if (value === null || typeof value === 'undefined') return '--';
+        return (Number(value) * 100).toFixed(1) + '%';
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      let toastTimer = null;
+      function showToast(message) {
+        toast.textContent = message;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function() {
+          toast.classList.remove('show');
+        }, 2600);
+      }
+    </script>
+  </body>
+</html>

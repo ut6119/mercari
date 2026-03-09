@@ -1,0 +1,42 @@
+name: Deploy GAS Web App
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "Code.gs"
+      - "Index.html"
+      - "appsscript.json"
+      - ".clasp.json"
+      - "scripts/deploy-webapp.sh"
+      - "package.json"
+      - "package-lock.json"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure clasp auth
+        run: |
+          printf '%s' "${{ secrets.CLASPRC_JSON }}" > "$HOME/.clasprc.json"
+
+      - name: Use fixed deployment ID (optional)
+        if: ${{ secrets.GAS_DEPLOYMENT_ID != '' }}
+        run: echo "${{ secrets.GAS_DEPLOYMENT_ID }}" > .gas-deployment-id
+
+      - name: Deploy
+        run: npm run deploy -- "github-actions deploy ${GITHUB_SHA::7}"
