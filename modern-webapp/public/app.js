@@ -105,11 +105,35 @@ function bindEvents() {
   soldTableBody.addEventListener('change', function(event) {
     if (event.target.matches('[data-select-row]')) {
       updateSelectedCount('sold');
+      return;
+    }
+    if (event.target.matches('[data-field]')) {
+      const row = event.target.closest('tr[data-id]');
+      void autoSaveRow(row, 'sold');
+    }
+  });
+  soldTableBody.addEventListener('input', function(event) {
+    if (event.target.matches('[data-field]')) {
+      const row = event.target.closest('tr[data-id]');
+      updateRowPreview(row, 'sold');
+      recalcSummaryFromDom();
     }
   });
   unsoldTableBody.addEventListener('change', function(event) {
     if (event.target.matches('[data-select-row]')) {
       updateSelectedCount('unsold');
+      return;
+    }
+    if (event.target.matches('[data-field]')) {
+      const row = event.target.closest('tr[data-id]');
+      void autoSaveRow(row, 'unsold');
+    }
+  });
+  unsoldTableBody.addEventListener('input', function(event) {
+    if (event.target.matches('[data-field]')) {
+      const row = event.target.closest('tr[data-id]');
+      updateRowPreview(row, 'unsold');
+      recalcSummaryFromDom();
     }
   });
 }
@@ -229,6 +253,21 @@ function setSelectionMode(status, enabled) {
     setRowsSelected(status, false);
   } else {
     updateSelectedCount(status);
+  }
+}
+
+async function autoSaveRow(row, status) {
+  if (!row || !row.dataset.id) return;
+
+  const payload = readRowPayload(row, status);
+  try {
+    const data = await request('/api/items', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    render(data);
+  } catch (error) {
+    showToast(error.message || '自動保存に失敗しました。');
   }
 }
 
@@ -370,17 +409,7 @@ function togglePending(isPending) {
 function render(data) {
   currentData = data;
   const summary = data.summary;
-
-  soldProfitValue.textContent = formatYen(summary.soldProfit);
-  soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
-  unsoldCostValue.textContent = formatYen(summary.unsoldCost);
-  unsoldCostNote.textContent = summary.unsoldCount + '件 / 現在の投資額';
-  overallNetValue.textContent = formatSignedYen(summary.overallNet);
-  overallNetValue.style.color = summary.overallNet < 0 ? '#9f3f3f' : '#1f6a52';
-  soldRevenueValue.textContent = formatYen(summary.soldRevenue);
-  lastUpdatedValue.textContent = '最終更新 ' + data.lastUpdated;
-  soldCountLabel.textContent = summary.soldCount + '件';
-  unsoldCountLabel.textContent = summary.unsoldCount + '件';
+  applySummary(summary, data.lastUpdated);
 
   soldTableBody.innerHTML = data.soldItems.length
     ? data.soldItems.map(renderSoldRow).join('')
@@ -404,8 +433,8 @@ function renderSoldRow(item) {
       <td><input data-field="revenue" type="number" min="0" step="1" value="${escapeHtml(String(item.revenue || ''))}"></td>
       <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String(item.shipping || 0))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
-      <td class="money">${formatSignedYen(item.profit)}</td>
-      <td class="rate"><span class="pill ${rateClass}">${formatPercent(item.margin)}</span></td>
+      <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
+      <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
     </tr>
   `;
 }
@@ -418,10 +447,106 @@ function renderUnsoldRow(item) {
       <td><input data-field="revenue" type="number" min="0" step="1" placeholder="0" value="${escapeHtml(String(item.revenue || ''))}"></td>
       <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String((item.shipping === '' || item.shipping === null || typeof item.shipping === 'undefined') ? 160 : item.shipping))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
-      <td class="money">${formatSignedYen(item.profit)}</td>
-      <td class="rate"><span class="pill neutral">${formatPercent(item.margin)}</span></td>
+      <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
+      <td class="rate"><span class="pill rate-pill neutral">${formatPercent(item.margin)}</span></td>
     </tr>
   `;
+}
+
+function applySummary(summary, lastUpdated) {
+  soldProfitValue.textContent = formatYen(summary.soldProfit);
+  soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
+  unsoldCostValue.textContent = formatYen(summary.unsoldCost);
+  unsoldCostNote.textContent = summary.unsoldCount + '件 / 現在の投資額';
+  overallNetValue.textContent = formatSignedYen(summary.overallNet);
+  overallNetValue.style.color = summary.overallNet < 0 ? '#9f3f3f' : '#1f6a52';
+  soldRevenueValue.textContent = formatYen(summary.soldRevenue);
+  soldCountLabel.textContent = summary.soldCount + '件';
+  unsoldCountLabel.textContent = summary.unsoldCount + '件';
+  if (lastUpdated) {
+    lastUpdatedValue.textContent = '最終更新 ' + lastUpdated;
+  }
+}
+
+function recalcSummaryFromDom() {
+  const soldRows = Array.from(soldTableBody.querySelectorAll('tr[data-id]'));
+  const unsoldRows = Array.from(unsoldTableBody.querySelectorAll('tr[data-id]'));
+  let soldRevenue = 0;
+  let soldFee = 0;
+  let soldShipping = 0;
+  let soldCost = 0;
+  let soldProfit = 0;
+  let unsoldCost = 0;
+
+  soldRows.forEach(function(row) {
+    const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
+    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
+    const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
+    const fee = Math.floor(revenue * 0.1);
+    const profit = revenue - fee - shipping - cost;
+    soldRevenue += revenue;
+    soldFee += fee;
+    soldShipping += shipping;
+    soldCost += cost;
+    soldProfit += profit;
+  });
+
+  unsoldRows.forEach(function(row) {
+    const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
+    unsoldCost += cost;
+  });
+
+  applySummary({
+    soldRevenue: soldRevenue,
+    soldFee: soldFee,
+    soldShipping: soldShipping,
+    soldCost: soldCost,
+    soldProfit: soldProfit,
+    soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldCost: unsoldCost,
+    overallNet: soldProfit - unsoldCost,
+    soldCount: soldRows.length,
+    unsoldCount: unsoldRows.length
+  });
+}
+
+function updateRowPreview(row, status) {
+  if (!row) return;
+
+  if (status === 'sold') {
+    const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
+    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
+    const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
+    const fee = Math.floor(revenue * 0.1);
+    const profit = revenue - fee - shipping - cost;
+    const margin = revenue > 0 ? profit / revenue : null;
+    const rateClass = margin !== null && margin >= 0.2 ? 'good' : (margin !== null && margin < 0 ? 'bad' : 'neutral');
+
+    const profitCell = row.querySelector('.profit-cell');
+    const ratePill = row.querySelector('.rate-pill');
+    if (profitCell) profitCell.textContent = formatSignedYen(profit);
+    if (ratePill) {
+      ratePill.textContent = formatPercent(margin);
+      ratePill.className = 'pill rate-pill ' + rateClass;
+    }
+    row.classList.remove('row-sold-good', 'row-sold-bad');
+    if (margin !== null && margin >= 0.2) row.classList.add('row-sold-good');
+    else if (profit < 0 || (margin !== null && margin < 0)) row.classList.add('row-sold-bad');
+    return;
+  }
+
+  const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
+  const profitCell = row.querySelector('.profit-cell');
+  if (profitCell) profitCell.textContent = formatSignedYen(-cost);
+}
+
+function sanitizeAmount_(value, emptyDefault) {
+  if (value === '' || value === null || typeof value === 'undefined') {
+    return Number(emptyDefault || 0);
+  }
+  const n = Number(value);
+  if (!Number.isFinite(n)) return Number(emptyDefault || 0);
+  return n < 0 ? 0 : n;
 }
 
 function formatYen(value) {
