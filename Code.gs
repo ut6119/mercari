@@ -331,11 +331,11 @@ function writeSheetFromItems_(items, targetSheet) {
     sheet.getRange(rowPointer, 1, 1, META_STATUS_COLUMN).setValues([[
       item.name,
       item.revenue || '',
-      '',
+      item.fee || '',
       item.shipping === '' ? DEFAULT_SHIPPING : item.shipping,
       item.cost,
-      -item.cost,
-      '',
+      item.profit,
+      item.margin,
       '',
       item.id,
       'unsold'
@@ -384,11 +384,13 @@ function enrichItem_(item) {
   const revenue = parseNumber_(item.revenue);
   const shipping = item.shipping === '' ? DEFAULT_SHIPPING : parseOptionalNumber_(item.shipping);
   const cost = parseNumber_(item.cost);
-  const fee = item.status === 'sold' ? Math.floor(revenue * 0.1) : 0;
-  const profit = item.status === 'sold'
-    ? revenue - fee - (shipping === '' ? DEFAULT_SHIPPING : shipping) - cost
+  const hasRevenue = revenue > 0;
+  const shippingValue = shipping === '' ? DEFAULT_SHIPPING : shipping;
+  const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
+  const profit = hasRevenue
+    ? revenue - fee - shippingValue - cost
     : -cost;
-  const margin = item.status === 'sold' && revenue > 0 ? profit / revenue : null;
+  const margin = hasRevenue ? profit / revenue : null;
 
   return {
     id: item.id,
@@ -463,7 +465,8 @@ function styleUnsoldRow_(sheet, row) {
   rowRange
     .setBackground('#fff7e8')
     .setFontWeight('normal');
-  applyCurrencyFormat_(sheet.getRange(row, 4, 1, 3));
+  applyCurrencyFormat_(sheet.getRange(row, 3, 1, 4));
+  applyPercentFormat_(sheet.getRange(row, 7, 1, 1));
 }
 
 function applyCurrencyFormat_(range) {

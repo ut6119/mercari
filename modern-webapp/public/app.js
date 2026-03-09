@@ -440,15 +440,22 @@ function renderSoldRow(item) {
 }
 
 function renderUnsoldRow(item) {
+  const hasMargin = item.margin !== null && typeof item.margin !== 'undefined';
+  const rowClass = hasMargin
+    ? (item.margin < 0 ? 'row-sold-bad' : (item.margin >= 0.2 ? 'row-sold-good' : 'row-unsold'))
+    : 'row-unsold';
+  const rateClass = hasMargin
+    ? (item.margin < 0 ? 'bad' : (item.margin >= 0.2 ? 'good' : 'neutral'))
+    : 'neutral';
   return `
-    <tr class="row-unsold" data-id="${escapeHtml(item.id)}">
+    <tr class="${rowClass}" data-id="${escapeHtml(item.id)}">
       <td class="selection-cell"><input data-select-row type="checkbox" aria-label="選択"></td>
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
       <td><input data-field="revenue" type="number" min="0" step="1" placeholder="0" value="${escapeHtml(String(item.revenue || ''))}"></td>
       <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String((item.shipping === '' || item.shipping === null || typeof item.shipping === 'undefined') ? 160 : item.shipping))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
-      <td class="rate"><span class="pill rate-pill neutral">${formatPercent(item.margin)}</span></td>
+      <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
     </tr>
   `;
 }
@@ -536,8 +543,24 @@ function updateRowPreview(row, status) {
   }
 
   const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
+  const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
+  const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
+  const hasRevenue = revenue > 0;
+  const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
+  const profit = hasRevenue ? (revenue - fee - shipping - cost) : -cost;
+  const margin = hasRevenue ? (profit / revenue) : null;
   const profitCell = row.querySelector('.profit-cell');
-  if (profitCell) profitCell.textContent = formatSignedYen(-cost);
+  const ratePill = row.querySelector('.rate-pill');
+  if (profitCell) profitCell.textContent = formatSignedYen(profit);
+  if (ratePill) {
+    const rateClass = margin !== null && margin >= 0.2 ? 'good' : (margin !== null && margin < 0 ? 'bad' : 'neutral');
+    ratePill.textContent = formatPercent(margin);
+    ratePill.className = 'pill rate-pill ' + rateClass;
+  }
+  row.classList.remove('row-sold-good', 'row-sold-bad', 'row-unsold');
+  if (margin !== null && margin >= 0.2) row.classList.add('row-sold-good');
+  else if (margin !== null && margin < 0) row.classList.add('row-sold-bad');
+  else row.classList.add('row-unsold');
 }
 
 function sanitizeAmount_(value, emptyDefault) {
