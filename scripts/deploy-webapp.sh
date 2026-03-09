@@ -21,7 +21,12 @@ DESCRIPTION="${*:-auto deploy $(date '+%Y-%m-%d %H:%M:%S')}"
 cd "$ROOT_DIR"
 
 echo "[1/3] push"
-"$CLASP_BIN" push --force
+if ! PUSH_OUT="$("$CLASP_BIN" push --force 2>&1)"; then
+  echo "Error: clasp push failed." >&2
+  echo "$PUSH_OUT" >&2
+  exit 1
+fi
+echo "$PUSH_OUT"
 
 echo "[2/3] version"
 if ! VERSION_OUT="$("$CLASP_BIN" version "$DESCRIPTION" 2>&1)"; then
@@ -39,15 +44,27 @@ fi
 
 DEPLOY_ID=""
 if [[ "$NEW_DEPLOY" == "false" && -s "$DEPLOY_ID_FILE" ]]; then
-  DEPLOY_ID="$(tr -d ' \t\r\n' < "$DEPLOY_ID_FILE")"
+  DEPLOY_ID="$(tr -d ' \t\r\n' < "$DEPLOY_ID_FILE" | sed -E 's/^["'"'"']+|["'"'"']+$//g')"
 fi
 
 if [[ -n "$DEPLOY_ID" ]]; then
   echo "[3/3] redeploy (stable URL)"
   if ! REDEPLOY_OUT="$("$CLASP_BIN" redeploy "$DEPLOY_ID" -V "$VERSION_NUM" -d "$DESCRIPTION" 2>&1)"; then
-    echo "Error: clasp redeploy failed." >&2
+    echo "Warn: clasp redeploy failed. fallback to new deploy." >&2
     echo "$REDEPLOY_OUT" >&2
-    exit 1
+    echo "[3/3] deploy (fallback: new URL)"
+    if ! DEPLOY_OUT="$("$CLASP_BIN" deploy -V "$VERSION_NUM" -d "$DESCRIPTION" 2>&1)"; then
+      echo "Error: clasp deploy failed after redeploy fallback." >&2
+      echo "$DEPLOY_OUT" >&2
+      exit 1
+    fi
+    DEPLOY_ID="$(echo "$DEPLOY_OUT" | sed -n 's/.*Deployed \([^ ]*\) @.*/\1/p' | tail -n 1)"
+    if [[ -z "$DEPLOY_ID" ]]; then
+      echo "Error: failed to parse deployment id from fallback deploy output." >&2
+      echo "$DEPLOY_OUT" >&2
+      exit 1
+    fi
+    echo "$DEPLOY_ID" > "$DEPLOY_ID_FILE"
   fi
 else
   echo "[3/3] deploy (new URL)"
