@@ -193,22 +193,22 @@ async function request(url, options) {
 
   const method = String((options && options.method) || 'GET').toUpperCase();
   if (url === '/api/dashboard' && method === 'GET') {
-    return jsonpRequest({ action: 'dashboard' });
+    return jsonpRequest({ api: 'dashboard' });
   }
   if (url === '/api/archive' && method === 'POST') {
-    return jsonpRequest({ action: 'archive' });
+    return jsonpRequest({ api: 'archive' });
   }
   if (url === '/api/items' && method === 'POST') {
     const item = options && options.body ? JSON.parse(options.body) : {};
     return jsonpRequest({
-      action: 'save',
+      api: 'save',
       item: JSON.stringify(item)
     });
   }
   if (url.indexOf('/api/items/') === 0 && method === 'DELETE') {
     const itemId = decodeURIComponent(url.split('/').pop() || '');
     return jsonpRequest({
-      action: 'delete',
+      api: 'delete',
       itemId: itemId
     });
   }
@@ -353,7 +353,7 @@ function jsonpRequest(params) {
     Object.keys(params || {}).forEach(function(key) {
       url.searchParams.set(key, String(params[key]));
     });
-    url.searchParams.set('callback', callbackName);
+    url.searchParams.set('cb', callbackName);
     url.searchParams.set('_ts', String(Date.now()));
 
     function cleanup() {

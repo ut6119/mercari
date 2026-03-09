@@ -14,10 +14,10 @@ function doGet(e) {
     try {
       const payload = parseApiGetPayload_(e);
       const result = runApiAction_(payload);
-      const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
+      const callback = String((e && e.parameter && (e.parameter.cb || e.parameter.callback)) || '').trim();
       return jsonOutput_(result, callback);
     } catch (error) {
-      const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
+      const callback = String((e && e.parameter && (e.parameter.cb || e.parameter.callback)) || '').trim();
       return jsonOutput_({
         error: String(error && error.message ? error.message : error)
       }, callback);
