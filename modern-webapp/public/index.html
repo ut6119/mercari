@@ -88,6 +88,16 @@
 
       .board-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
       .board-head h3 { margin: 0; font-size: 19px; }
+      .board-head-right {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .board-head-action {
+        padding: 5px 10px;
+        font-size: 11px;
+        border-radius: 999px;
+      }
       .board-head span {
         color: #1f4b99;
         font-size: 11px;
@@ -245,8 +255,6 @@
         <div class="hero-top">
           <h1 class="title">メルカリ収支アプリ</h1>
           <div class="hero-actions">
-            <button class="button button-secondary" id="undoButton" type="button">戻る</button>
-            <button class="button button-secondary" id="redoButton" type="button">進む</button>
             <button class="button button-secondary" id="refreshButton" type="button">再読込</button>
             <button class="button button-secondary" id="archiveButton" type="button">前月をアーカイブ</button>
           </div>
@@ -281,7 +289,11 @@
           <section class="panel sold-panel" id="soldPanel">
             <div class="board-head">
               <h3>販売済み</h3>
-              <span id="soldCountLabel">0件</span>
+              <div class="board-head-right">
+                <button class="button button-secondary board-head-action" id="soldUndoButton" type="button">戻る</button>
+                <button class="button button-secondary board-head-action" id="soldRedoButton" type="button">進む</button>
+                <span id="soldCountLabel">0件</span>
+              </div>
             </div>
             <div class="bulk-toolbar" id="soldToolbar">
               <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>
@@ -315,7 +327,11 @@
           <section class="panel unsold-panel" id="unsoldPanel">
             <div class="board-head">
               <h3>未販売在庫</h3>
-              <span id="unsoldCountLabel">0件</span>
+              <div class="board-head-right">
+                <button class="button button-secondary board-head-action" id="unsoldUndoButton" type="button">戻る</button>
+                <button class="button button-secondary board-head-action" id="unsoldRedoButton" type="button">進む</button>
+                <span id="unsoldCountLabel">0件</span>
+              </div>
             </div>
             <div class="bulk-toolbar" id="unsoldToolbar">
               <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>

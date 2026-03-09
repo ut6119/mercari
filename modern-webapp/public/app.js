@@ -39,8 +39,10 @@ const unsoldToolbar = document.getElementById('unsoldToolbar');
 const quickAddForm = document.getElementById('quickAddForm');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
-const undoButton = document.getElementById('undoButton');
-const redoButton = document.getElementById('redoButton');
+const soldUndoButton = document.getElementById('soldUndoButton');
+const soldRedoButton = document.getElementById('soldRedoButton');
+const unsoldUndoButton = document.getElementById('unsoldUndoButton');
+const unsoldRedoButton = document.getElementById('unsoldRedoButton');
 const refreshButton = document.getElementById('refreshButton');
 const archiveButton = document.getElementById('archiveButton');
 const addButton = document.getElementById('addButton');
@@ -130,12 +132,18 @@ function bindEvents() {
     reloadData('最新状態を読み込みました。');
   });
 
-  undoButton.addEventListener('click', function() {
-    void handleUndo();
+  [soldUndoButton, unsoldUndoButton].forEach(function(button) {
+    if (!button) return;
+    button.addEventListener('click', function() {
+      void handleUndo();
+    });
   });
 
-  redoButton.addEventListener('click', function() {
-    void handleRedo();
+  [soldRedoButton, unsoldRedoButton].forEach(function(button) {
+    if (!button) return;
+    button.addEventListener('click', function() {
+      void handleRedo();
+    });
   });
 
   archiveButton.addEventListener('click', async function() {
@@ -487,14 +495,7 @@ function updateSelectAllButtonLabel(status) {
   if (!panel) return;
   const button = panel.querySelector('[data-bulk-action="toggle-select-all"]');
   if (!button) return;
-  if (!selectionMode[status]) {
-    button.textContent = '全選択';
-    return;
-  }
-
-  const totalRows = Array.from(getBodyByStatus(status).querySelectorAll('tr[data-id]')).length;
-  const selectedCount = getSelectedRows(status).length;
-  button.textContent = totalRows > 0 && selectedCount === totalRows ? '解除' : '全選択';
+  button.textContent = '全選択';
 }
 
 function scheduleAutoSave(row, status) {
@@ -1021,7 +1022,7 @@ async function runApi(fn) {
 
 function togglePending(isPending) {
   const bulkButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
-  [undoButton, redoButton, refreshButton, archiveButton, addButton].concat(bulkButtons).forEach(function(button) {
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, refreshButton, archiveButton, addButton].concat(bulkButtons).forEach(function(button) {
     button.disabled = isPending;
   });
   if (!isPending) {
@@ -1030,8 +1031,12 @@ function togglePending(isPending) {
 }
 
 function updateHistoryButtons_() {
-  if (undoButton) undoButton.disabled = pending || historyPast.length === 0;
-  if (redoButton) redoButton.disabled = pending || historyFuture.length === 0;
+  [soldUndoButton, unsoldUndoButton].forEach(function(button) {
+    if (button) button.disabled = pending || historyPast.length === 0;
+  });
+  [soldRedoButton, unsoldRedoButton].forEach(function(button) {
+    if (button) button.disabled = pending || historyFuture.length === 0;
+  });
 }
 
 function render(data, options) {
