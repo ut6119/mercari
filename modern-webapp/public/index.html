@@ -6,29 +6,36 @@
     <title>メルカリ収支アプリ</title>
     <style>
       :root {
-        --bg: #f3f0e8;
-        --panel: #fffdf8;
-        --line: #d7d1c7;
-        --text: #1e2328;
-        --muted: #6f746e;
-        --accent: #1f6a52;
-        --danger: #9f3f3f;
+        --bg: #f4f7fb;
+        --panel: #ffffff;
+        --line: #d8dfeb;
+        --text: #1b2230;
+        --muted: #5c667a;
+        --accent: #2a7fff;
+        --accent-2: #14b8a6;
+        --danger: #cc3f59;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
         color: var(--text);
-        background: radial-gradient(circle at top left, rgba(31, 106, 82, 0.12), transparent 28%), var(--bg);
+        background:
+          radial-gradient(circle at 8% 8%, rgba(42, 127, 255, 0.24), transparent 30%),
+          radial-gradient(circle at 92% 4%, rgba(20, 184, 166, 0.2), transparent 26%),
+          linear-gradient(180deg, #eef3fb 0%, #f9fbff 36%, #f4f7fb 100%);
       }
       .shell { width: min(1280px, calc(100vw - 24px)); margin: 24px auto 40px; }
       .hero, .panel {
-        background: rgba(255, 253, 248, 0.94);
-        border: 1px solid rgba(215, 209, 199, 0.8);
+        background: rgba(255, 255, 255, 0.94);
+        border: 1px solid rgba(216, 223, 235, 0.9);
         border-radius: 18px;
-        box-shadow: 0 18px 40px rgba(30, 35, 40, 0.08);
+        box-shadow: 0 16px 36px rgba(15, 33, 68, 0.1);
       }
-      .hero { padding: 24px; }
+      .hero {
+        padding: 24px;
+        background: linear-gradient(140deg, rgba(42, 127, 255, 0.11), rgba(20, 184, 166, 0.08) 58%, rgba(255, 255, 255, 0.95));
+      }
       .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
       .title { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1; letter-spacing: -0.04em; }
       .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -38,12 +45,16 @@
       }
       .button:hover, button:hover { transform: translateY(-1px); }
       .button:disabled, button:disabled { opacity: 0.5; cursor: wait; transform: none; }
-      .button-primary { background: var(--accent); color: #fff; }
-      .button-secondary { background: #e7e1d8; color: var(--text); }
-      .button-danger { background: #f6dddd; color: var(--danger); }
+      .button-primary { background: linear-gradient(135deg, var(--accent), #2467da); color: #fff; }
+      .button-secondary { background: #e8eefb; color: #23417f; }
+      .button-danger { background: #fde8ee; color: var(--danger); }
 
       .stats { margin-top: 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-      .stat { padding: 14px; border-radius: 14px; background: #fff; border: 1px solid rgba(215, 209, 199, 0.8); }
+      .stat { padding: 14px; border-radius: 14px; background: #fff; border: 1px solid rgba(216, 223, 235, 0.9); }
+      .stat:nth-child(1) { background: linear-gradient(135deg, #edf4ff, #fafdff); }
+      .stat:nth-child(2) { background: linear-gradient(135deg, #fff6e7, #fffdf8); }
+      .stat:nth-child(3) { background: linear-gradient(135deg, #eefaf7, #f8fffe); }
+      .stat:nth-child(4) { background: linear-gradient(135deg, #f5f4ff, #fdfdff); }
       .stat-label { font-size: 12px; color: var(--muted); }
       .stat-value { margin-top: 6px; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; letter-spacing: -0.05em; }
       .stat-note { margin-top: 4px; font-size: 12px; color: var(--muted); }
@@ -54,29 +65,66 @@
       .panel p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
 
       .boards {
-        display: flex;
-        gap: 18px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
         order: 1;
-        align-items: start;
-        overflow-x: auto;
-        padding-bottom: 4px;
       }
-      .boards > .panel {
-        flex: 1 0 calc((100% - 18px) / 2);
-        min-width: 560px;
-      }
+      .boards > .panel { min-width: 0; }
       #quickAddPanel { order: 2; }
+      .sold-panel { background: linear-gradient(180deg, #f6f9ff 0%, #ffffff 24%); }
+      .unsold-panel { background: linear-gradient(180deg, #fff9f1 0%, #ffffff 24%); }
 
       .board-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
       .board-head h3 { margin: 0; font-size: 19px; }
-      .board-head span { color: var(--muted); font-size: 12px; }
+      .board-head span {
+        color: #1f4b99;
+        font-size: 11px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: #eaf1ff;
+        border: 1px solid #c8dafc;
+      }
 
-      .table-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
-      table { width: 100%; border-collapse: collapse; min-width: 980px; }
-      th, td { padding: 12px 10px; border-bottom: 1px solid #ece7df; text-align: left; vertical-align: middle; font-size: 13px; }
-      th { position: sticky; top: 0; background: #23272d; color: #fff; font-size: 12px; letter-spacing: 0.02em; z-index: 1; }
-      td input { min-width: 90px; padding: 10px 12px; width: 100%; border: 1px solid var(--line); border-radius: 10px; }
-      td.actions { white-space: nowrap; }
+      .table-wrap { overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
+      table { width: 100%; border-collapse: collapse; min-width: 0; table-layout: fixed; }
+      .compact-table .col-name { width: 22%; }
+      .compact-table .col-revenue,
+      .compact-table .col-fee,
+      .compact-table .col-shipping,
+      .compact-table .col-cost,
+      .compact-table .col-profit { width: 10%; }
+      .compact-table .col-rate { width: 10%; }
+      .compact-table .col-actions { width: 18%; }
+      th, td {
+        padding: 10px 6px;
+        border-bottom: 1px solid #e8edf6;
+        text-align: left;
+        vertical-align: middle;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      th {
+        position: sticky;
+        top: 0;
+        background: linear-gradient(180deg, #273447, #202a3a);
+        color: #fff;
+        font-size: 11px;
+        letter-spacing: 0.01em;
+        z-index: 1;
+      }
+      td input {
+        min-width: 0;
+        padding: 8px 8px;
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        font-size: 12px;
+        background: #fbfdff;
+      }
+      td.actions { white-space: normal; }
       .money, .rate, .center { text-align: right; }
       .pill {
         display: inline-flex; align-items: center; justify-content: center; min-width: 82px;
@@ -100,8 +148,8 @@
       .field input { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; background: #fff; }
       .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-      .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-      .mini { padding: 10px 12px; font-size: 12px; }
+      .inline-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+      .mini { width: 100%; padding: 7px 4px; font-size: 11px; border-radius: 10px; }
       .hidden { display: none; }
       .toast {
         position: fixed; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 14px;
@@ -116,11 +164,10 @@
         .hero-top { flex-direction: column; }
         .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        table { min-width: 860px; }
-        th, td { padding: 8px 6px; font-size: 11px; }
-        td input { min-width: 80px; padding: 8px 8px; }
-        td.actions { white-space: nowrap; }
-        .mini { padding: 7px 8px; font-size: 11px; }
+        th, td { padding: 6px 4px; font-size: 10px; }
+        td input { padding: 6px 6px; font-size: 10px; }
+        .pill { min-width: 54px; padding: 4px 6px; font-size: 10px; }
+        .mini { padding: 6px 2px; font-size: 10px; }
         .board-head h3 { font-size: 17px; }
       }
     </style>
@@ -162,13 +209,23 @@
 
       <div class="layout">
         <div class="boards">
-          <section class="panel">
+          <section class="panel sold-panel">
             <div class="board-head">
               <h3>販売済み</h3>
               <span id="soldCountLabel">0件</span>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="compact-table">
+                <colgroup>
+                  <col class="col-name">
+                  <col class="col-revenue">
+                  <col class="col-fee">
+                  <col class="col-shipping">
+                  <col class="col-cost">
+                  <col class="col-profit">
+                  <col class="col-rate">
+                  <col class="col-actions">
+                </colgroup>
                 <thead>
                   <tr>
                     <th>名前</th><th class="center">売上</th><th class="center">手数料</th><th class="center">送料</th>
@@ -180,13 +237,23 @@
             </div>
           </section>
 
-          <section class="panel">
+          <section class="panel unsold-panel">
             <div class="board-head">
               <h3>未販売在庫</h3>
               <span id="unsoldCountLabel">0件</span>
             </div>
             <div class="table-wrap">
-              <table>
+              <table class="compact-table">
+                <colgroup>
+                  <col class="col-name">
+                  <col class="col-revenue">
+                  <col class="col-fee">
+                  <col class="col-shipping">
+                  <col class="col-cost">
+                  <col class="col-profit">
+                  <col class="col-rate">
+                  <col class="col-actions">
+                </colgroup>
                 <thead>
                   <tr>
                     <th>名前</th><th class="center">売上</th><th class="center">手数料</th><th class="center">送料</th>

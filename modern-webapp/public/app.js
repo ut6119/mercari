@@ -275,7 +275,7 @@ function renderSoldRow(item) {
       <td class="actions">
         <div class="inline-actions">
           <button class="button button-primary mini" type="button" data-action="save">保存</button>
-          <button class="button button-secondary mini" type="button" data-action="unsold">未販売へ</button>
+          <button class="button button-secondary mini" type="button" data-action="unsold">未販へ</button>
           <button class="button button-danger mini" type="button" data-action="delete">削除</button>
         </div>
       </td>
@@ -296,7 +296,7 @@ function renderUnsoldRow(item) {
       <td class="actions">
         <div class="inline-actions">
           <button class="button button-secondary mini" type="button" data-action="save">保存</button>
-          <button class="button button-primary mini" type="button" data-action="sell">販売済みにする</button>
+          <button class="button button-primary mini" type="button" data-action="sell">販売済へ</button>
           <button class="button button-danger mini" type="button" data-action="delete">削除</button>
         </div>
       </td>
