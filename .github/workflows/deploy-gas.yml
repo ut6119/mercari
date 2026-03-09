@@ -10,6 +10,7 @@ on:
       - "Index.html"
       - "appsscript.json"
       - ".clasp.json"
+      - ".github/workflows/deploy-gas.yml"
       - "scripts/deploy-webapp.sh"
       - "package.json"
       - "package-lock.json"
@@ -17,6 +18,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,9 +35,6 @@ jobs:
         run: npm ci
 
       - name: Validate required secrets
-        env:
-          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
-          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
         run: |
           test -n "$CLASPRC_JSON" || { echo "ERROR: CLASPRC_JSON is missing"; exit 1; }
           echo "$CLASPRC_JSON" | jq -e '.token.refresh_token and .oauth2ClientSettings.clientId' >/dev/null \
@@ -44,11 +45,11 @@ jobs:
 
       - name: Configure clasp auth
         run: |
-          printf '%s' "${{ secrets.CLASPRC_JSON }}" > "$HOME/.clasprc.json"
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
 
       - name: Use fixed deployment ID (optional)
-        if: ${{ secrets.GAS_DEPLOYMENT_ID != '' }}
-        run: echo "${{ secrets.GAS_DEPLOYMENT_ID }}" > .gas-deployment-id
+        if: ${{ env.GAS_DEPLOYMENT_ID != '' }}
+        run: echo "$GAS_DEPLOYMENT_ID" > .gas-deployment-id
 
       - name: Deploy
         run: npm run deploy -- "github-actions deploy ${GITHUB_SHA::7}"
