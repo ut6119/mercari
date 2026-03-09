@@ -2,6 +2,14 @@
 
 Googleスプレッドシート `メルカリ` シートをデータソースにする Apps Script Webアプリです。
 
+## 通常Webアプリ版（GAS UIを使わない）
+
+`modern-webapp/` に、通常のWebアプリ版を追加済みです。  
+`Express + Google Sheets API` で動作し、UIは `http://localhost:3000` で開けます。
+
+詳細手順:
+- [modern-webapp/README.md](/Users/ookuboyuuta/Documents/New%20project/mercari_inventory_webapp/modern-webapp/README.md)
+
 ## ファイル
 
 - `Code.gs`: サーバー処理

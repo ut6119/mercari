@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>メルカリ収支アプリ</title>
+    <style>
+      :root {
+        --bg: #f3f0e8;
+        --panel: #fffdf8;
+        --line: #d7d1c7;
+        --text: #1e2328;
+        --muted: #6f746e;
+        --accent: #1f6a52;
+        --danger: #9f3f3f;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Hiragino Sans", "Yu Gothic", sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at top left, rgba(31, 106, 82, 0.12), transparent 28%), var(--bg);
+      }
+      .shell { width: min(1280px, calc(100vw - 24px)); margin: 24px auto 40px; }
+      .hero, .panel {
+        background: rgba(255, 253, 248, 0.94);
+        border: 1px solid rgba(215, 209, 199, 0.8);
+        border-radius: 18px;
+        box-shadow: 0 18px 40px rgba(30, 35, 40, 0.08);
+      }
+      .hero { padding: 24px; }
+      .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+      .title { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1; letter-spacing: -0.04em; }
+      .hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+      .button, button {
+        appearance: none; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700;
+        cursor: pointer; transition: transform 120ms ease, opacity 120ms ease;
+      }
+      .button:hover, button:hover { transform: translateY(-1px); }
+      .button:disabled, button:disabled { opacity: 0.5; cursor: wait; transform: none; }
+      .button-primary { background: var(--accent); color: #fff; }
+      .button-secondary { background: #e7e1d8; color: var(--text); }
+      .button-danger { background: #f6dddd; color: var(--danger); }
+
+      .stats { margin-top: 22px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .stat { padding: 14px; border-radius: 14px; background: #fff; border: 1px solid rgba(215, 209, 199, 0.8); }
+      .stat-label { font-size: 12px; color: var(--muted); }
+      .stat-value { margin-top: 6px; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; letter-spacing: -0.05em; }
+      .stat-note { margin-top: 4px; font-size: 12px; color: var(--muted); }
+
+      .layout { display: grid; grid-template-columns: 1fr; gap: 18px; margin-top: 18px; }
+      .panel { padding: 20px; }
+      .panel h2 { margin: 0; font-size: 20px; }
+      .panel p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+
+      .boards {
+        display: flex;
+        gap: 18px;
+        order: 1;
+        align-items: start;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+      .boards > .panel {
+        flex: 1 0 calc((100% - 18px) / 2);
+        min-width: 560px;
+      }
+      #quickAddPanel { order: 2; }
+
+      .board-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+      .board-head h3 { margin: 0; font-size: 19px; }
+      .board-head span { color: var(--muted); font-size: 12px; }
+
+      .table-wrap { overflow-x: auto; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
+      table { width: 100%; border-collapse: collapse; min-width: 980px; }
+      th, td { padding: 12px 10px; border-bottom: 1px solid #ece7df; text-align: left; vertical-align: middle; font-size: 13px; }
+      th { position: sticky; top: 0; background: #23272d; color: #fff; font-size: 12px; letter-spacing: 0.02em; z-index: 1; }
+      td input { min-width: 90px; padding: 10px 12px; width: 100%; border: 1px solid var(--line); border-radius: 10px; }
+      td.actions { white-space: nowrap; }
+      .money, .rate, .center { text-align: right; }
+      .pill {
+        display: inline-flex; align-items: center; justify-content: center; min-width: 82px;
+        padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 800;
+      }
+      .pill.good { background: #d9ead3; color: #1d5e2d; }
+      .pill.bad { background: #f4cccc; color: #8f3030; }
+      .pill.neutral { background: #ece7df; color: #595f5a; }
+      .row-sold-good { background: #f5fbf6; }
+      .row-sold-bad { background: #fff5f5; }
+      .row-unsold { background: #fffaf0; }
+
+      .segmented {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px;
+        background: #ece7df; border-radius: 999px; margin-top: 18px;
+      }
+      .segment { background: transparent; color: var(--muted); }
+      .segment.active { background: #fff; color: var(--text); }
+      .form-grid { display: grid; gap: 12px; margin-top: 18px; }
+      .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+      .field input { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; background: #fff; }
+      .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+      .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .mini { padding: 10px 12px; font-size: 12px; }
+      .hidden { display: none; }
+      .toast {
+        position: fixed; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 14px;
+        background: rgba(30, 35, 40, 0.92); color: #fff; font-size: 13px; opacity: 0;
+        pointer-events: none; transform: translateY(10px); transition: opacity 140ms ease, transform 140ms ease;
+      }
+      .toast.show { opacity: 1; transform: translateY(0); }
+
+      @media (max-width: 720px) {
+        .shell { width: min(100vw - 12px, 100%); margin: 12px auto 28px; }
+        .hero, .panel { padding: 16px; }
+        .hero-top { flex-direction: column; }
+        .field-row { grid-template-columns: 1fr; }
+        .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        table { min-width: 860px; }
+        th, td { padding: 8px 6px; font-size: 11px; }
+        td input { min-width: 80px; padding: 8px 8px; }
+        td.actions { white-space: nowrap; }
+        .mini { padding: 7px 8px; font-size: 11px; }
+        .board-head h3 { font-size: 17px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <section class="hero">
+        <div class="hero-top">
+          <h1 class="title">メルカリ収支アプリ</h1>
+          <div class="hero-actions">
+            <button class="button button-secondary" id="refreshButton" type="button">再読込</button>
+            <button class="button button-secondary" id="archiveButton" type="button">前月をアーカイブ</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">販売済み利益</div>
+            <div class="stat-value" id="soldProfitValue">¥0</div>
+            <div class="stat-note" id="soldProfitNote">0件 / 利益率 0.0%</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">未販売在庫</div>
+            <div class="stat-value" id="unsoldCostValue">¥0</div>
+            <div class="stat-note" id="unsoldCostNote">0件 / 現在の投資額</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">販売前後の合計収支</div>
+            <div class="stat-value" id="overallNetValue">¥0</div>
+            <div class="stat-note">販売済み利益 - 未販売在庫原価</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">売上合計</div>
+            <div class="stat-value" id="soldRevenueValue">¥0</div>
+            <div class="stat-note" id="lastUpdatedValue">最終更新 -</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="layout">
+        <div class="boards">
+          <section class="panel">
+            <div class="board-head">
+              <h3>販売済み</h3>
+              <span id="soldCountLabel">0件</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>名前</th><th class="center">売上</th><th class="center">手数料</th><th class="center">送料</th>
+                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th><th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="soldTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="board-head">
+              <h3>未販売在庫</h3>
+              <span id="unsoldCountLabel">0件</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>名前</th><th class="center">売上</th><th class="center">手数料</th><th class="center">送料</th>
+                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th><th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="unsoldTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel" id="quickAddPanel">
+          <h2>商品追加</h2>
+          <div class="segmented">
+            <button class="segment active" type="button" data-status-tab="unsold">未販売</button>
+            <button class="segment" type="button" data-status-tab="sold">販売済み</button>
+          </div>
+          <form id="quickAddForm" class="form-grid">
+            <div class="field">
+              <label for="nameInput">名前</label>
+              <input id="nameInput" name="name" type="text" placeholder="商品名">
+            </div>
+            <div class="field-row">
+              <div class="field" id="revenueField">
+                <label for="revenueInput">売上</label>
+                <input id="revenueInput" name="revenue" type="number" min="0" step="1" placeholder="0">
+              </div>
+              <div class="field">
+                <label for="costInput">原価</label>
+                <input id="costInput" name="cost" type="number" min="0" step="1" placeholder="0">
+              </div>
+            </div>
+            <div class="field">
+              <label for="shippingInput">送料</label>
+              <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
+            </div>
+            <button class="button button-primary" id="addButton" type="submit">追加する</button>
+          </form>
+        </section>
+      </div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <script src="/app.js"></script>
+  </body>
+  </html>
