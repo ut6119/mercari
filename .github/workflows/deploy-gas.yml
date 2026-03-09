@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+      CLASPRC_JSON_B64: ${{ secrets.CLASPRC_JSON_B64 }}
       GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
     steps:
       - name: Checkout
@@ -39,9 +40,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$CLASPRC_JSON" || { echo "ERROR: CLASPRC_JSON is missing"; exit 1; }
-          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          if [[ -n "${CLASPRC_JSON_B64:-}" ]]; then
+            printf '%s' "$CLASPRC_JSON_B64" | base64 --decode > "$HOME/.clasprc.json" || {
+              echo "ERROR: CLASPRC_JSON_B64 decode failed"
+              exit 1
+            }
+          elif [[ -n "${CLASPRC_JSON:-}" ]]; then
+            printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          else
+            echo "ERROR: CLASPRC_JSON or CLASPRC_JSON_B64 is required"
+            exit 1
+          fi
+
           test -s "$HOME/.clasprc.json" || { echo "ERROR: failed to write ~/.clasprc.json"; exit 1; }
+          node -e "JSON.parse(require('fs').readFileSync(process.env.HOME + '/.clasprc.json','utf8'))" || {
+            echo "ERROR: ~/.clasprc.json is invalid JSON"
+            exit 1
+          }
 
       - name: Use fixed deployment ID (optional)
         if: ${{ env.GAS_DEPLOYMENT_ID != '' }}

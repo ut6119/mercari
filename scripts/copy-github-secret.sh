@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 TARGET="${1:-}"
 
 if [[ -z "$TARGET" ]]; then
-  echo "Usage: $0 {clasprc|deployment-id}" >&2
+  echo "Usage: $0 {clasprc|clasprc-b64|deployment-id}" >&2
   exit 1
 fi
 
@@ -23,6 +23,14 @@ case "$TARGET" in
     tr -d '\n\r' < "$HOME/.clasprc.json" | pbcopy
     echo "Copied value for CLASPRC_JSON to clipboard."
     ;;
+  clasprc-b64)
+    if [[ ! -s "$HOME/.clasprc.json" ]]; then
+      echo "Error: $HOME/.clasprc.json not found." >&2
+      exit 1
+    fi
+    base64 < "$HOME/.clasprc.json" | tr -d '\n\r' | pbcopy
+    echo "Copied value for CLASPRC_JSON_B64 to clipboard."
+    ;;
   deployment-id)
     if [[ ! -s "$ROOT_DIR/.gas-deployment-id" ]]; then
       echo "Error: $ROOT_DIR/.gas-deployment-id not found." >&2
@@ -32,7 +40,7 @@ case "$TARGET" in
     echo "Copied value for GAS_DEPLOYMENT_ID to clipboard."
     ;;
   *)
-    echo "Usage: $0 {clasprc|deployment-id}" >&2
+    echo "Usage: $0 {clasprc|clasprc-b64|deployment-id}" >&2
     exit 1
     ;;
 esac
