@@ -197,11 +197,23 @@ async function handleBulkAction(status, event) {
     return;
   }
   if (action === 'select-all') {
+    if (!selectionMode[status]) {
+      setSelectionMode(status, true);
+    }
     setRowsSelected(status, true);
     return;
   }
   if (action === 'clear-selection') {
+    if (!selectionMode[status]) {
+      setSelectionMode(status, true);
+    }
     setRowsSelected(status, false);
+    return;
+  }
+
+  if (!selectionMode[status]) {
+    setSelectionMode(status, true);
+    showToast('行を選択してください。');
     return;
   }
 
@@ -266,6 +278,8 @@ async function handleBulkAction(status, event) {
     render(latestData || await request('/api/dashboard'));
     setRowsSelected('sold', false);
     setRowsSelected('unsold', false);
+    setSelectionMode('sold', false);
+    setSelectionMode('unsold', false);
 
     if (action === 'save') showToast('選択行を保存しました。');
     if (action === 'to-sold') showToast('選択行を販売済みに移動しました。');
