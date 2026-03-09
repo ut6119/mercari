@@ -1,35 +1,34 @@
 # modern-webapp
 
-GASの `HtmlService` を使わない、通常のWebアプリ版です。  
-`Express` が API と静的フロントを提供し、データは Google Sheets API で直接読み書きします。
+GASの `HtmlService` を使わない、通常Webアプリ版です。
 
-## 1. 事前準備
+## 最短起動（設定ほぼ不要）
 
-1. GCPでサービスアカウントを作成
-2. JSONキーを発行
-3. 対象スプレッドシートをサービスアカウントのメールアドレスに共有（編集者）
-
-## 2. 環境変数
-
-`.env.example` を `.env` にコピーして設定します。
-
-- `GOOGLE_SERVICE_ACCOUNT_JSON`: サービスアカウントJSON（生JSON or base64）
-- `SPREADSHEET_ID`: 対象スプレッドシートID
-- `SHEET_NAME`: 通常は `メルカリ`
-
-## 3. 起動
+このモードは、`~/.clasprc.json` があれば Apps Script API 経由で動きます。
+（既に `clasp login` 済みなら追加設定なし）
 
 ```bash
 cd modern-webapp
+cp .env.example .env
 npm install
 npm run dev
 ```
 
-起動後:
+開くURL: `http://localhost:3000`
 
-- Web UI: `http://localhost:3000`
-- API:
-  - `GET /api/dashboard`
-  - `POST /api/items`
-  - `DELETE /api/items/:id`
-  - `POST /api/archive`
+もし `~/.clasprc.json` が無い環境では、`.env` の `GAS_WEBAPP_URL` を使うフォールバックになります。
+
+## GitHub Pages で公開する場合
+
+このフォルダの `public/` は GitHub Pages 用です。  
+`public/index.html` の `window.APP_CONFIG.gasEndpoint` を現在の GAS Web アプリ URL に合わせれば、  
+`https://ut6119.github.io/mercari/` で動きます。
+
+## 本番向け（GAS依存を外す）
+
+`GOOGLE_SERVICE_ACCOUNT_JSON` を設定すると、Google Sheets APIへ直接接続します。
+
+1. GCPでサービスアカウントを作成
+2. JSONキーを発行
+3. シートをサービスアカウントに共有（編集者）
+4. `.env` に `GOOGLE_SERVICE_ACCOUNT_JSON` を設定

@@ -9,7 +9,21 @@ const META_STATUS_COLUMN = 10;
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
 
-function doGet() {
+function doGet(e) {
+  if (isApiRequest_(e)) {
+    try {
+      const payload = parseApiGetPayload_(e);
+      const result = runApiAction_(payload);
+      const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
+      return jsonOutput_(result, callback);
+    } catch (error) {
+      const callback = String((e && e.parameter && e.parameter.callback) || '').trim();
+      return jsonOutput_({
+        error: String(error && error.message ? error.message : error)
+      }, callback);
+    }
+  }
+
   normalizeCurrentSheet();
   const template = HtmlService.createTemplateFromFile('Index');
   template.initialDataJson = JSON.stringify(getDashboardData_());
@@ -18,6 +32,18 @@ function doGet() {
     .evaluate()
     .setTitle('メルカリ収支アプリ')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+function doPost(e) {
+  try {
+    const payload = parseApiPayload_(e);
+    const result = runApiAction_(payload);
+    return jsonOutput_(result);
+  } catch (error) {
+    return jsonOutput_({
+      error: String(error && error.message ? error.message : error)
+    });
+  }
 }
 
 function include(filename) {
@@ -505,4 +531,120 @@ function hasItemBody_(row) {
 
 function isSummaryLabel_(value) {
   return /^【.+】$/.test(value);
+}
+
+function isApiDashboardRequest_(e) {
+  return isApiRequest_(e);
+}
+
+function isApiRequest_(e) {
+  if (!e || !e.parameter) {
+    return false;
+  }
+  const api = String(e.parameter.api || '').trim().toLowerCase();
+  const action = String(e.parameter.action || '').trim().toLowerCase();
+  return Boolean(api || action);
+}
+
+function parseApiGetPayload_(e) {
+  const p = (e && e.parameter) ? e.parameter : {};
+  const action = String(p.action || p.api || 'dashboard').trim().toLowerCase();
+
+  if (action === 'save') {
+    let item = {};
+    if (p.item) {
+      try {
+        item = JSON.parse(String(p.item));
+      } catch (error) {
+        throw new Error('Invalid item payload.');
+      }
+    } else {
+      item = {
+        id: p.id || '',
+        status: p.status || '',
+        name: p.name || '',
+        revenue: p.revenue || '',
+        shipping: p.shipping || '',
+        cost: p.cost || ''
+      };
+    }
+    return {
+      action: 'save',
+      item: item
+    };
+  }
+
+  if (action === 'delete') {
+    return {
+      action: 'delete',
+      itemId: String(p.itemId || p.id || '').trim()
+    };
+  }
+
+  if (action === 'archive') {
+    return { action: 'archive' };
+  }
+
+  if (action === 'dashboard') {
+    return { action: 'dashboard' };
+  }
+
+  throw new Error('Unknown action: ' + action);
+}
+
+function parseApiPayload_(e) {
+  if (!e || !e.postData || !e.postData.contents) {
+    return {};
+  }
+  const raw = String(e.postData.contents || '');
+  if (!raw) {
+    return {};
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    throw new Error('Invalid JSON payload.');
+  }
+}
+
+function jsonOutput_(data) {
+  const callback = String(arguments[1] || '').trim();
+  if (callback) {
+    if (!/^[A-Za-z_$][0-9A-Za-z_$]{0,63}$/.test(callback)) {
+      throw new Error('Invalid callback.');
+    }
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(data) + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function runApiAction_(payload) {
+  const action = String(payload.action || '').trim().toLowerCase();
+
+  if (action === 'dashboard') {
+    return getDashboardData_();
+  }
+
+  if (action === 'save') {
+    return saveItem(payload.item || payload.payload || payload);
+  }
+
+  if (action === 'delete') {
+    const itemId = String(payload.itemId || payload.id || '').trim();
+    if (!itemId) {
+      throw new Error('itemId is required.');
+    }
+    return deleteItem(itemId);
+  }
+
+  if (action === 'archive') {
+    return archiveMonthlyData();
+  }
+
+  throw new Error('Unknown action: ' + action);
 }

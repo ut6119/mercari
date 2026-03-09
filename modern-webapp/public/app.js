@@ -2,6 +2,10 @@ let currentData = null;
 let draftStatus = 'unsold';
 let pending = false;
 let toastTimer = null;
+const LOCAL_API_ORIGIN = 'http://localhost:3000';
+const GAS_API_ENDPOINT = (window.APP_CONFIG && window.APP_CONFIG.gasEndpoint)
+  || 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec';
+const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 
 const soldProfitValue = document.getElementById('soldProfitValue');
 const soldProfitNote = document.getElementById('soldProfitNote');
@@ -175,15 +179,41 @@ async function reloadData(message) {
 }
 
 async function request(url, options) {
-  const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
-  });
-  const data = await response.json().catch(function() { return {}; });
-  if (!response.ok) {
-    throw new Error(data.error || '通信に失敗しました。');
+  if (USE_LOCAL_API) {
+    const response = await fetch(url, {
+      headers: { 'Content-Type': 'application/json' },
+      ...options
+    });
+    const data = await response.json().catch(function() { return {}; });
+    if (!response.ok) {
+      throw new Error(data.error || '通信に失敗しました。');
+    }
+    return data;
   }
-  return data;
+
+  const method = String((options && options.method) || 'GET').toUpperCase();
+  if (url === '/api/dashboard' && method === 'GET') {
+    return jsonpRequest({ action: 'dashboard' });
+  }
+  if (url === '/api/archive' && method === 'POST') {
+    return jsonpRequest({ action: 'archive' });
+  }
+  if (url === '/api/items' && method === 'POST') {
+    const item = options && options.body ? JSON.parse(options.body) : {};
+    return jsonpRequest({
+      action: 'save',
+      item: JSON.stringify(item)
+    });
+  }
+  if (url.indexOf('/api/items/') === 0 && method === 'DELETE') {
+    const itemId = decodeURIComponent(url.split('/').pop() || '');
+    return jsonpRequest({
+      action: 'delete',
+      itemId: itemId
+    });
+  }
+
+  throw new Error('未対応のAPI呼び出しです。');
 }
 
 async function runApi(fn) {
@@ -308,4 +338,54 @@ function showToast(message) {
   toastTimer = setTimeout(function() {
     toast.classList.remove('show');
   }, 2600);
+}
+
+function jsonpRequest(params) {
+  return new Promise(function(resolve, reject) {
+    const callbackName = 'mercariCb' + Date.now() + Math.floor(Math.random() * 1000000);
+    const timeout = setTimeout(function() {
+      cleanup();
+      reject(new Error('通信がタイムアウトしました。'));
+    }, 15000);
+
+    const script = document.createElement('script');
+    const url = new URL(GAS_API_ENDPOINT);
+    Object.keys(params || {}).forEach(function(key) {
+      url.searchParams.set(key, String(params[key]));
+    });
+    url.searchParams.set('callback', callbackName);
+    url.searchParams.set('_ts', String(Date.now()));
+
+    function cleanup() {
+      clearTimeout(timeout);
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+      try {
+        delete window[callbackName];
+      } catch (error) {
+        window[callbackName] = undefined;
+      }
+    }
+
+    window[callbackName] = function(data) {
+      cleanup();
+      if (!data || typeof data !== 'object') {
+        reject(new Error('不正なレスポンスです。'));
+        return;
+      }
+      if (data.error) {
+        reject(new Error(data.error));
+        return;
+      }
+      resolve(data);
+    };
+
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('通信に失敗しました。'));
+    };
+    script.src = url.toString();
+    document.head.appendChild(script);
+  });
 }
