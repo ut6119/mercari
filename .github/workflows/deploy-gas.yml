@@ -37,7 +37,7 @@ jobs:
       - name: Validate required secrets
         run: |
           test -n "$CLASPRC_JSON" || { echo "ERROR: CLASPRC_JSON is missing"; exit 1; }
-          node -e 'const s=process.env.CLASPRC_JSON||"";let o;try{o=JSON.parse(s)}catch(e){process.exit(2)};if(!o?.token?.refresh_token||!o?.oauth2ClientSettings?.clientId)process.exit(3);' \
+          node -e 'const s=process.env.CLASPRC_JSON||"";let o;try{o=JSON.parse(s)}catch(e){process.exit(2)};const legacy=!!(o?.token?.refresh_token&&o?.oauth2ClientSettings?.clientId);const modern=!!(o?.tokens?.default?.refresh_token&&o?.tokens?.default?.client_id);if(!(legacy||modern))process.exit(3);' \
             || { echo "ERROR: CLASPRC_JSON format is invalid"; exit 1; }
           if [ -z "$GAS_DEPLOYMENT_ID" ]; then
             echo "WARN: GAS_DEPLOYMENT_ID is empty. New deployment URL may be created."
