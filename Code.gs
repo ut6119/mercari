@@ -1,4 +1,4 @@
-const TARGET_SPREADSHEET_ID = '1MoRWqtUdZaLAgJtQKa_jyjpHkcYiDKFuJ6axK5RsnXU';
+const TARGET_SPREADSHEET_ID = '12z7V7um65_0Ut0Ix-Mdw-hI_InFKFBZdUR5C5xZAIAM';
 const SHEET_NAME = 'メルカリ';
 const HEADER_ROW = 1;
 const SUMMARY_ROW = 2;

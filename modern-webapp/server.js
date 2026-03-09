@@ -9,8 +9,10 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const PORT = Number(process.env.PORT || 3000);
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '1MoRWqtUdZaLAgJtQKa_jyjpHkcYiDKFuJ6axK5RsnXU';
+const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '12z7V7um65_0Ut0Ix-Mdw-hI_InFKFBZdUR5C5xZAIAM';
 const SHEET_NAME = process.env.SHEET_NAME || 'メルカリ';
+const APPS_SCRIPT_ID = process.env.APPS_SCRIPT_ID || '1mO-eAwwqtwem_d3wKdJCr4ZWDtDv1MK3-lnaYUhK4oDMGY94dZ2vuNC3';
+const GAS_WEBAPP_URL = process.env.GAS_WEBAPP_URL || 'https://script.google.com/macros/s/AKfycbxf4n5j3R0Gom37Jz9lJIvnVVlPUBHWGvCDjRzYl6Rnxm0HtPC68iJD5qwO4FIkO8A3/exec';
 const DATA_START_ROW = 3;
 const VISIBLE_COLUMN_COUNT = 8;
 const META_ID_COLUMN = 9;
@@ -18,15 +20,24 @@ const META_STATUS_COLUMN = 10;
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Tokyo';
 
-const auth = new google.auth.GoogleAuth({
-  credentials: resolveCredentials(),
-  scopes: ['https://www.googleapis.com/auth/spreadsheets']
-});
-const sheets = google.sheets({ version: 'v4', auth });
+const BACKEND_MODE = detectBackendMode_();
+let sheets = null;
+let scriptApi = null;
+if (BACKEND_MODE === 'sheets') {
+  const auth = new google.auth.GoogleAuth({
+    credentials: resolveCredentials(),
+    scopes: ['https://www.googleapis.com/auth/spreadsheets']
+  });
+  sheets = google.sheets({ version: 'v4', auth });
+}
+if (BACKEND_MODE === 'script') {
+  const auth = createClaspOAuthClient_();
+  scriptApi = google.script({ version: 'v1', auth });
+}
 
 app.get('/api/dashboard', async (_req, res) => {
   try {
-    const data = await getDashboardData();
+    const data = await getDashboardData_();
     res.json(data);
   } catch (error) {
     handleError(res, error);
@@ -36,15 +47,7 @@ app.get('/api/dashboard', async (_req, res) => {
 app.post('/api/items', async (req, res) => {
   try {
     const item = sanitizePayload(req.body || {});
-    const items = await readItems();
-    const index = items.findIndex((existing) => existing.id === item.id);
-    if (index >= 0) {
-      items[index] = item;
-    } else {
-      items.push(item);
-    }
-    await writeSheetFromItems(items, SHEET_NAME);
-    const data = await getDashboardData();
+    const data = await saveItem_(item);
     res.json(data);
   } catch (error) {
     handleError(res, error);
@@ -54,9 +57,7 @@ app.post('/api/items', async (req, res) => {
 app.delete('/api/items/:id', async (req, res) => {
   try {
     const itemId = String(req.params.id || '');
-    const items = (await readItems()).filter((item) => item.id !== itemId);
-    await writeSheetFromItems(items, SHEET_NAME);
-    const data = await getDashboardData();
+    const data = await deleteItem_(itemId);
     res.json(data);
   } catch (error) {
     handleError(res, error);
@@ -65,20 +66,7 @@ app.delete('/api/items/:id', async (req, res) => {
 
 app.post('/api/archive', async (_req, res) => {
   try {
-    const items = await readItems();
-    const archiveName = getLastMonthLabel();
-    const sheetNames = await getSheetNames();
-    if (sheetNames.includes(archiveName)) {
-      throw createBadRequest(`「${archiveName}」は既に存在します。`);
-    }
-
-    const soldOnly = items.filter((item) => item.status === 'sold');
-    const unsoldOnly = items.filter((item) => item.status === 'unsold');
-
-    await writeSheetFromItems(soldOnly, archiveName);
-    await writeSheetFromItems(unsoldOnly, SHEET_NAME);
-
-    const data = await getDashboardData();
+    const data = await archiveMonthlyData_();
     res.json(data);
   } catch (error) {
     handleError(res, error);
@@ -86,8 +74,48 @@ app.post('/api/archive', async (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Mercari web app: http://localhost:${PORT}`);
+  console.log(`Mercari web app: http://localhost:${PORT} (${BACKEND_MODE} backend)`);
 });
+
+function detectBackendMode_() {
+  if (hasSheetsCredentials_()) {
+    return 'sheets';
+  }
+  if (hasClaspCredentials_()) {
+    return 'script';
+  }
+  return 'gas';
+}
+
+function hasSheetsCredentials_() {
+  return Boolean(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_PATH);
+}
+
+function hasClaspCredentials_() {
+  try {
+    const home = process.env.HOME || '';
+    if (!home) return false;
+    const raw = fs.readFileSync(`${home}/.clasprc.json`, 'utf8');
+    const parsed = JSON.parse(raw);
+    const token = parsed?.tokens?.default || null;
+    return Boolean(token?.client_id && token?.client_secret && token?.refresh_token);
+  } catch {
+    return false;
+  }
+}
+
+function createClaspOAuthClient_() {
+  const home = process.env.HOME || '';
+  const raw = fs.readFileSync(`${home}/.clasprc.json`, 'utf8');
+  const parsed = JSON.parse(raw);
+  const token = parsed?.tokens?.default || {};
+  const oauth2Client = new google.auth.OAuth2(token.client_id, token.client_secret);
+  oauth2Client.setCredentials({
+    refresh_token: token.refresh_token,
+    access_token: token.access_token
+  });
+  return oauth2Client;
+}
 
 function resolveCredentials() {
   if (process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
@@ -102,6 +130,131 @@ function resolveCredentials() {
     return JSON.parse(fs.readFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON_PATH, 'utf8'));
   }
   throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_JSON (raw or base64).');
+}
+
+async function getDashboardData_() {
+  if (BACKEND_MODE === 'script') {
+    return scriptAction_('dashboard');
+  }
+  if (BACKEND_MODE === 'gas') {
+    return gasAction_('dashboard');
+  }
+  return getDashboardData();
+}
+
+async function saveItem_(item) {
+  if (BACKEND_MODE === 'script') {
+    return scriptAction_('save', { item });
+  }
+  if (BACKEND_MODE === 'gas') {
+    return gasAction_('save', { item });
+  }
+  const items = await readItems();
+  const index = items.findIndex((existing) => existing.id === item.id);
+  if (index >= 0) {
+    items[index] = item;
+  } else {
+    items.push(item);
+  }
+  await writeSheetFromItems(items, SHEET_NAME);
+  return getDashboardData();
+}
+
+async function deleteItem_(itemId) {
+  if (BACKEND_MODE === 'script') {
+    return scriptAction_('delete', { itemId });
+  }
+  if (BACKEND_MODE === 'gas') {
+    return gasAction_('delete', { itemId });
+  }
+  const items = (await readItems()).filter((item) => item.id !== itemId);
+  await writeSheetFromItems(items, SHEET_NAME);
+  return getDashboardData();
+}
+
+async function archiveMonthlyData_() {
+  if (BACKEND_MODE === 'script') {
+    return scriptAction_('archive');
+  }
+  if (BACKEND_MODE === 'gas') {
+    return gasAction_('archive');
+  }
+  const items = await readItems();
+  const archiveName = getLastMonthLabel();
+  const sheetNames = await getSheetNames();
+  if (sheetNames.includes(archiveName)) {
+    throw createBadRequest(`「${archiveName}」は既に存在します。`);
+  }
+  const soldOnly = items.filter((item) => item.status === 'sold');
+  const unsoldOnly = items.filter((item) => item.status === 'unsold');
+  await writeSheetFromItems(soldOnly, archiveName);
+  await writeSheetFromItems(unsoldOnly, SHEET_NAME);
+  return getDashboardData();
+}
+
+async function scriptAction_(action, payload) {
+  let functionName = '';
+  let parameters = [];
+
+  if (action === 'dashboard') {
+    functionName = 'getDashboardData';
+    parameters = [];
+  } else if (action === 'save') {
+    functionName = 'saveItem';
+    parameters = [payload?.item || {}];
+  } else if (action === 'delete') {
+    functionName = 'deleteItem';
+    parameters = [String(payload?.itemId || '')];
+  } else if (action === 'archive') {
+    functionName = 'archiveMonthlyData';
+    parameters = [];
+  } else {
+    throw createBadRequest(`Unknown action: ${action}`);
+  }
+
+  const response = await scriptApi.scripts.run({
+    scriptId: APPS_SCRIPT_ID,
+    requestBody: {
+      function: functionName,
+      parameters
+    }
+  });
+
+  if (response.data?.error) {
+    const detail = response.data.error.details?.[0];
+    const message = detail?.errorMessage || response.data.error.message || 'Apps Script API error';
+    throw new Error(message);
+  }
+
+  return response.data?.response?.result;
+}
+
+async function gasAction_(action, payload) {
+  const body = {
+    action,
+    ...(payload || {})
+  };
+  const response = await fetch(GAS_WEBAPP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+
+  const text = await response.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`GAS API returned non-JSON response (${response.status}).`);
+  }
+
+  if (!response.ok) {
+    throw new Error(json.error || `GAS API request failed (${response.status}).`);
+  }
+  if (json && json.error) {
+    throw createBadRequest(String(json.error));
+  }
+  return json;
 }
 
 async function getDashboardData() {
