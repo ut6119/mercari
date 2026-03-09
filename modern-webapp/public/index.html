@@ -365,9 +365,22 @@
       </div>
     </div>
     <div class="toast" id="toast"></div>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
     <script>
       window.APP_CONFIG = {
-        gasEndpoint: 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec'
+        gasEndpoint: 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec',
+        firebase: {
+          enabled: false,
+          collection: 'mercari_items',
+          archiveCollection: 'mercari_archives',
+          config: {
+            apiKey: '',
+            authDomain: '',
+            projectId: '',
+            appId: ''
+          }
+        }
       };
     </script>
     <script src="./app.js"></script>

@@ -8,6 +8,16 @@ const LOCAL_API_ORIGIN = 'http://localhost:3000';
 const GAS_API_ENDPOINT = (window.APP_CONFIG && window.APP_CONFIG.gasEndpoint)
   || 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec';
 const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
+const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
+const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
+const FIREBASE_ARCHIVE_COLLECTION = FIREBASE_OPTIONS.archiveCollection || 'mercari_archives';
+const DEFAULT_SHIPPING = 160;
+const APP_TIMEZONE = 'Asia/Tokyo';
+
+let backendMode = 'gas';
+let firebaseDb = null;
+let firebaseItemsCollection = null;
+let firebaseItemsCache = [];
 
 const soldProfitValue = document.getElementById('soldProfitValue');
 const soldProfitNote = document.getElementById('soldProfitNote');
@@ -43,9 +53,42 @@ init().catch(function(error) {
 });
 
 async function init() {
+  await initializeBackend();
   bindEvents();
   document.querySelector('[data-status-tab="unsold"]').click();
   await reloadData('最新状態を読み込みました。');
+}
+
+async function initializeBackend() {
+  if (USE_LOCAL_API) {
+    backendMode = 'local';
+    return;
+  }
+
+  if (!FIREBASE_OPTIONS.enabled) {
+    backendMode = 'gas';
+    return;
+  }
+
+  if (!window.firebase || !window.firebase.firestore) {
+    backendMode = 'gas';
+    showToast('Firebase SDKが未読み込みのためGASモードで動作します。');
+    return;
+  }
+
+  const config = FIREBASE_OPTIONS.config || {};
+  if (!config.projectId || !config.apiKey || !config.appId) {
+    backendMode = 'gas';
+    showToast('Firebase設定が不完全のためGASモードで動作します。');
+    return;
+  }
+
+  const app = window.firebase.apps && window.firebase.apps.length
+    ? window.firebase.app()
+    : window.firebase.initializeApp(config);
+  firebaseDb = window.firebase.firestore(app);
+  firebaseItemsCollection = firebaseDb.collection(FIREBASE_COLLECTION);
+  backendMode = 'firebase';
 }
 
 function bindEvents() {
@@ -139,7 +182,7 @@ function readRowPayload(row, status) {
     status: status,
     name: row.querySelector('[data-field="name"]').value.trim(),
     revenue: row.querySelector('[data-field="revenue"]').value,
-    shipping: shippingRaw === '' ? '160' : shippingRaw,
+    shipping: shippingRaw === '' ? String(DEFAULT_SHIPPING) : shippingRaw,
     cost: row.querySelector('[data-field="cost"]').value
   };
 }
@@ -348,7 +391,11 @@ async function reloadData(message) {
 }
 
 async function request(url, options) {
-  if (USE_LOCAL_API) {
+  if (backendMode === 'firebase') {
+    return firebaseRequest(url, options);
+  }
+
+  if (backendMode === 'local') {
     const response = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
       ...options
@@ -360,6 +407,33 @@ async function request(url, options) {
     return data;
   }
 
+  const params = convertRequestToGasParams_(url, options);
+  const connector = GAS_API_ENDPOINT.indexOf('?') >= 0 ? '&' : '?';
+  const targetUrl = GAS_API_ENDPOINT + connector + params.toString();
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: 'GET',
+      redirect: 'follow',
+      cache: 'no-store'
+    });
+    const data = await response.json().catch(function() { return {}; });
+    if (!response.ok) {
+      throw new Error(data.error || '通信に失敗しました。');
+    }
+    if (data && data.error) {
+      throw new Error(data.error);
+    }
+    if (!data || typeof data !== 'object' || !data.summary) {
+      throw new Error('不正なレスポンスです。');
+    }
+    return data;
+  } catch (_error) {
+    return jsonpRequest(params);
+  }
+}
+
+function convertRequestToGasParams_(url, options) {
   const method = String((options && options.method) || 'GET').toUpperCase();
   const params = new URLSearchParams();
 
@@ -393,29 +467,317 @@ async function request(url, options) {
   }
 
   params.set('_ts', String(Date.now()));
-  const connector = GAS_API_ENDPOINT.indexOf('?') >= 0 ? '&' : '?';
-  const targetUrl = GAS_API_ENDPOINT + connector + params.toString();
+  return params;
+}
 
-  try {
-    const response = await fetch(targetUrl, {
-      method: 'GET',
-      redirect: 'follow',
-      cache: 'no-store'
-    });
-    const data = await response.json().catch(function() { return {}; });
-    if (!response.ok) {
-      throw new Error(data.error || '通信に失敗しました。');
-    }
-    if (data && data.error) {
-      throw new Error(data.error);
-    }
-    if (!data || typeof data !== 'object' || !data.summary) {
-      throw new Error('不正なレスポンスです。');
-    }
-    return data;
-  } catch (_error) {
-    return jsonpRequest(params);
+async function firebaseRequest(url, options) {
+  if (!firebaseItemsCollection) {
+    throw new Error('Firebase初期化に失敗しました。');
   }
+
+  const method = String((options && options.method) || 'GET').toUpperCase();
+  const body = options && options.body ? JSON.parse(options.body) : {};
+
+  if (url === '/api/dashboard' && method === 'GET') {
+    return firebaseLoadDashboard_();
+  }
+  if (url === '/api/items' && method === 'POST') {
+    return firebaseSaveItem_(body);
+  }
+  if (url.indexOf('/api/items/') === 0 && method === 'DELETE') {
+    const itemId = decodeURIComponent(url.split('/').pop() || '');
+    return firebaseDeleteItems_([itemId]);
+  }
+  if (url === '/api/items/bulk' && method === 'POST') {
+    if (body.action === 'deleteMany') {
+      return firebaseDeleteItems_(body.itemIds || []);
+    }
+    if (body.action === 'moveMany') {
+      return firebaseMoveItems_(body.itemIds || [], body.targetStatus);
+    }
+    throw new Error('未対応の一括処理です。');
+  }
+  if (url === '/api/archive' && method === 'POST') {
+    return firebaseArchive_();
+  }
+
+  throw new Error('未対応のAPI呼び出しです。');
+}
+
+async function firebaseLoadDashboard_() {
+  const snapshot = await firebaseItemsCollection.get();
+  firebaseItemsCache = snapshot.docs.map(function(doc) {
+    const data = doc.data() || {};
+    return {
+      id: doc.id,
+      status: normalizeStatusValue_(data.status) || 'unsold',
+      name: String(data.name || '').trim(),
+      revenue: sanitizeAmount_(data.revenue),
+      shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
+      cost: sanitizeAmount_(data.cost)
+    };
+  });
+  return buildDashboardDataFromItems_(firebaseItemsCache);
+}
+
+async function firebaseSaveItem_(payload) {
+  const item = sanitizePayloadForStore_(payload);
+  const now = Date.now();
+  const id = String(item.id || firebaseItemsCollection.doc().id);
+  const existing = firebaseItemsCache.find(function(candidate) {
+    return candidate.id === id;
+  });
+  const stored = {
+    id: id,
+    status: item.status,
+    name: item.name,
+    revenue: item.revenue,
+    shipping: item.shipping,
+    cost: item.cost
+  };
+
+  await firebaseItemsCollection.doc(id).set({
+    status: stored.status,
+    name: stored.name,
+    revenue: stored.revenue,
+    shipping: stored.shipping,
+    cost: stored.cost,
+    createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : now,
+    updatedAtMs: now
+  }, { merge: true });
+
+  if (existing) {
+    Object.assign(existing, stored, { updatedAtMs: now });
+  } else {
+    firebaseItemsCache.push(Object.assign({}, stored, { createdAtMs: now, updatedAtMs: now }));
+  }
+
+  return buildDashboardDataFromItems_(firebaseItemsCache, now);
+}
+
+async function firebaseDeleteItems_(itemIds) {
+  const ids = normalizeIds_(itemIds);
+  if (!ids.length) {
+    throw new Error('削除対象がありません。');
+  }
+
+  const batch = firebaseDb.batch();
+  ids.forEach(function(id) {
+    batch.delete(firebaseItemsCollection.doc(id));
+  });
+  await batch.commit();
+
+  const idSet = new Set(ids);
+  firebaseItemsCache = firebaseItemsCache.filter(function(item) {
+    return !idSet.has(item.id);
+  });
+  return buildDashboardDataFromItems_(firebaseItemsCache);
+}
+
+async function firebaseMoveItems_(itemIds, targetStatus) {
+  const ids = normalizeIds_(itemIds);
+  const normalizedStatus = normalizeStatusValue_(targetStatus);
+  if (!ids.length) {
+    throw new Error('移動対象がありません。');
+  }
+  if (normalizedStatus !== 'sold' && normalizedStatus !== 'unsold') {
+    throw new Error('移動先ステータスが不正です。');
+  }
+
+  const now = Date.now();
+  const idSet = new Set(ids);
+  const moving = firebaseItemsCache.filter(function(item) {
+    return idSet.has(item.id);
+  });
+
+  if (!moving.length) {
+    throw new Error('対象の商品が見つかりません。');
+  }
+  if (normalizedStatus === 'sold') {
+    const invalid = moving.find(function(item) {
+      return sanitizeAmount_(item.revenue) <= 0;
+    });
+    if (invalid) {
+      throw new Error('販売済みに移動する行は売上を入力してください。');
+    }
+  }
+
+  const batch = firebaseDb.batch();
+  moving.forEach(function(item) {
+    batch.set(firebaseItemsCollection.doc(item.id), {
+      status: normalizedStatus,
+      updatedAtMs: now
+    }, { merge: true });
+  });
+  await batch.commit();
+
+  firebaseItemsCache.forEach(function(item) {
+    if (idSet.has(item.id)) {
+      item.status = normalizedStatus;
+      item.updatedAtMs = now;
+    }
+  });
+  return buildDashboardDataFromItems_(firebaseItemsCache, now);
+}
+
+async function firebaseArchive_() {
+  const soldItems = firebaseItemsCache.filter(function(item) {
+    return item.status === 'sold';
+  });
+  if (!soldItems.length) {
+    return buildDashboardDataFromItems_(firebaseItemsCache);
+  }
+
+  const month = getLastMonthLabel_();
+  const archivedAt = Date.now();
+  const batch = firebaseDb.batch();
+
+  soldItems.forEach(function(item) {
+    const archiveRef = firebaseDb
+      .collection(FIREBASE_ARCHIVE_COLLECTION)
+      .doc(month)
+      .collection('items')
+      .doc(item.id);
+    batch.set(archiveRef, {
+      status: item.status,
+      name: item.name,
+      revenue: item.revenue,
+      shipping: item.shipping,
+      cost: item.cost,
+      archivedAtMs: archivedAt
+    }, { merge: true });
+    batch.delete(firebaseItemsCollection.doc(item.id));
+  });
+
+  await batch.commit();
+  firebaseItemsCache = firebaseItemsCache.filter(function(item) {
+    return item.status !== 'sold';
+  });
+  return buildDashboardDataFromItems_(firebaseItemsCache, archivedAt);
+}
+
+function buildDashboardDataFromItems_(rawItems, updatedAtMs) {
+  const items = Array.isArray(rawItems) ? rawItems : [];
+  const soldItems = items
+    .filter(function(item) { return item.status === 'sold'; })
+    .map(enrichItem_);
+  const unsoldItems = items
+    .filter(function(item) { return item.status === 'unsold'; })
+    .map(enrichItem_);
+  const summary = buildSummary_(soldItems, unsoldItems);
+  return {
+    summary: summary,
+    soldItems: soldItems,
+    unsoldItems: unsoldItems,
+    lastUpdated: formatDateTime_(updatedAtMs || Date.now())
+  };
+}
+
+function sanitizePayloadForStore_(payload) {
+  const source = payload || {};
+  const status = normalizeStatusValue_(source.status) || 'unsold';
+  const revenue = sanitizeAmount_(source.revenue);
+  const shipping = sanitizeAmount_(source.shipping, DEFAULT_SHIPPING);
+  const cost = sanitizeAmount_(source.cost);
+  const name = String(source.name || '').trim();
+
+  if (!name) {
+    throw new Error('商品名は必須です。');
+  }
+  if (status === 'sold' && revenue <= 0) {
+    throw new Error('販売済みは売上を入力してください。');
+  }
+
+  return {
+    id: String(source.id || ''),
+    status: status,
+    name: name,
+    revenue: revenue,
+    shipping: shipping,
+    cost: cost
+  };
+}
+
+function enrichItem_(item) {
+  const revenue = sanitizeAmount_(item.revenue);
+  const shipping = sanitizeAmount_(item.shipping, DEFAULT_SHIPPING);
+  const cost = sanitizeAmount_(item.cost);
+  const hasRevenue = revenue > 0;
+  const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
+  const profit = hasRevenue ? revenue - fee - shipping - cost : -cost;
+  const margin = hasRevenue ? profit / revenue : null;
+
+  return {
+    id: String(item.id || ''),
+    status: normalizeStatusValue_(item.status) || 'unsold',
+    name: String(item.name || ''),
+    revenue: revenue,
+    shipping: shipping,
+    cost: cost,
+    fee: fee,
+    profit: profit,
+    margin: margin
+  };
+}
+
+function buildSummary_(soldItems, unsoldItems) {
+  const soldRevenue = soldItems.reduce(function(total, item) { return total + item.revenue; }, 0);
+  const soldFee = soldItems.reduce(function(total, item) { return total + item.fee; }, 0);
+  const soldShipping = soldItems.reduce(function(total, item) { return total + item.shipping; }, 0);
+  const soldCost = soldItems.reduce(function(total, item) { return total + item.cost; }, 0);
+  const soldProfit = soldItems.reduce(function(total, item) { return total + item.profit; }, 0);
+  const unsoldCost = unsoldItems.reduce(function(total, item) { return total + item.cost; }, 0);
+
+  return {
+    soldRevenue: soldRevenue,
+    soldFee: soldFee,
+    soldShipping: soldShipping,
+    soldCost: soldCost,
+    soldProfit: soldProfit,
+    soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldCost: unsoldCost,
+    overallNet: soldProfit - unsoldCost,
+    soldCount: soldItems.length,
+    unsoldCount: unsoldItems.length
+  };
+}
+
+function normalizeStatusValue_(value) {
+  const status = String(value || '').trim().toLowerCase();
+  if (status === 'sold' || status === 'unsold') {
+    return status;
+  }
+  return '';
+}
+
+function normalizeIds_(value) {
+  if (Array.isArray(value)) {
+    return value.map(function(v) { return String(v || '').trim(); }).filter(Boolean);
+  }
+  return String(value || '')
+    .split(',')
+    .map(function(v) { return String(v || '').trim(); })
+    .filter(Boolean);
+}
+
+function formatDateTime_(ms) {
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(new Date(ms)).replace(',', '');
+}
+
+function getLastMonthLabel_() {
+  const now = new Date();
+  const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const month = now.getMonth() === 0 ? 12 : now.getMonth();
+  return year + '-' + String(month).padStart(2, '0');
 }
 
 function jsonpRequest(params) {
