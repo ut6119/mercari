@@ -39,56 +39,8 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$CLASPRC_JSON" || { echo "ERROR: CLASPRC_JSON is missing"; exit 1; }
-          node <<'NODE'
-          const fs = require('fs');
-          const home = process.env.HOME;
-          const raw = process.env.CLASPRC_JSON || '';
-
-          function canParse(v) {
-            try {
-              JSON.parse(v);
-              return true;
-            } catch {
-              return false;
-            }
-          }
-
-          const candidates = [
-            raw,
-            raw.trim(),
-            raw.replace(/^"(.*)"$/s, '$1'),
-            raw.replace(/^'(.*)'$/s, '$1'),
-          ];
-
-          for (const c of candidates) {
-            if (!c) continue;
-
-            if (canParse(c)) {
-              fs.writeFileSync(`${home}/.clasprc.json`, c);
-              console.log('Prepared .clasprc.json (raw)');
-              process.exit(0);
-            }
-
-            const unescaped = c.replace(/\\n/g, '\n').replace(/\\"/g, '"');
-            if (canParse(unescaped)) {
-              fs.writeFileSync(`${home}/.clasprc.json`, unescaped);
-              console.log('Prepared .clasprc.json (unescaped)');
-              process.exit(0);
-            }
-
-            try {
-              const decoded = Buffer.from(c, 'base64').toString('utf8');
-              if (canParse(decoded)) {
-                fs.writeFileSync(`${home}/.clasprc.json`, decoded);
-                console.log('Prepared .clasprc.json (base64 decoded)');
-                process.exit(0);
-              }
-            } catch {}
-          }
-
-          console.error('ERROR: CLASPRC_JSON format is invalid');
-          process.exit(1);
-          NODE
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          test -s "$HOME/.clasprc.json" || { echo "ERROR: failed to write ~/.clasprc.json"; exit 1; }
 
       - name: Use fixed deployment ID (optional)
         if: ${{ env.GAS_DEPLOYMENT_ID != '' }}
