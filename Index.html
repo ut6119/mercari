@@ -242,11 +242,17 @@
       }
 
       .boards {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        display: flex;
         gap: 18px;
         order: 1;
         align-items: start;
+        overflow-x: auto;
+        padding-bottom: 4px;
+      }
+
+      .boards > .panel {
+        flex: 1 0 calc((100% - 18px) / 2);
+        min-width: 560px;
       }
 
       #quickAddPanel {
@@ -272,8 +278,7 @@
       }
 
       .table-wrap {
-        overflow: auto;
-        max-height: min(58vh, 640px);
+        overflow-x: auto;
         border-radius: 16px;
         border: 1px solid var(--line);
         background: #fff;
@@ -392,12 +397,6 @@
         display: none;
       }
 
-      @media (max-width: 1080px) {
-        .boards {
-          grid-template-columns: 1fr;
-        }
-      }
-
       @media (max-width: 720px) {
         .shell {
           width: min(100vw - 12px, 100%);
@@ -423,75 +422,25 @@
         }
 
         table {
-          min-width: 0;
-          table-layout: fixed;
-        }
-
-        thead {
-          display: none;
-        }
-
-        tbody,
-        tr,
-        td {
-          display: block;
-          width: 100%;
-        }
-
-        tr {
-          background: #fff;
-          border: 1px solid var(--line);
-          border-radius: 12px;
-          margin-bottom: 10px;
-          padding: 2px 8px;
+          min-width: 860px;
         }
 
         th,
         td {
           padding: 8px 6px;
           font-size: 11px;
-          border-bottom: 1px solid #ece7df;
-        }
-
-        td::before {
-          content: attr(data-label);
-          display: block;
-          color: var(--muted);
-          font-size: 10px;
-          margin-bottom: 4px;
-          line-height: 1.2;
-        }
-
-        td:last-child {
-          border-bottom: 0;
         }
 
         td input {
-          min-width: 0;
+          min-width: 80px;
           padding: 8px 8px;
         }
 
         td.actions {
-          white-space: normal;
-        }
-
-        .table-empty td {
-          border-bottom: 0;
-        }
-
-        .table-empty td::before {
-          content: "";
-          margin: 0;
-        }
-
-        .inline-actions {
-          flex-direction: column;
-          gap: 6px;
-          width: 100%;
+          white-space: nowrap;
         }
 
         .mini {
-          width: 100%;
           padding: 7px 8px;
           font-size: 11px;
         }
