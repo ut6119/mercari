@@ -174,13 +174,12 @@ function openSpreadsheet_() {
 
 function readItems_() {
   const sheet = ensureSheet_();
-  const lastRow = Math.max(sheet.getLastRow(), DATA_START_ROW - 1);
-
-  if (lastRow < DATA_START_ROW) {
+  const totalRows = Math.max(sheet.getMaxRows() - DATA_START_ROW + 1, 0);
+  if (totalRows <= 0) {
     return [];
   }
 
-  const values = sheet.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, META_STATUS_COLUMN).getValues();
+  const values = sheet.getRange(DATA_START_ROW, 1, totalRows, META_STATUS_COLUMN).getValues();
   const items = [];
   let separatorSeen = false;
 
@@ -201,6 +200,11 @@ function readItems_() {
     }
 
     const name = String(row[0] || '').trim();
+    if (isUnsoldSectionLabel_(name) && !idMeta) {
+      separatorSeen = true;
+      return;
+    }
+
     if (!name && !hasItemBody_(row)) {
       return;
     }
@@ -531,6 +535,10 @@ function hasItemBody_(row) {
 
 function isSummaryLabel_(value) {
   return /^【.+】$/.test(value);
+}
+
+function isUnsoldSectionLabel_(value) {
+  return /未販売在庫/.test(String(value || ''));
 }
 
 function isApiDashboardRequest_(e) {
