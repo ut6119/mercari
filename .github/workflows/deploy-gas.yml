@@ -30,6 +30,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate required secrets
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          GAS_DEPLOYMENT_ID: ${{ secrets.GAS_DEPLOYMENT_ID }}
+        run: |
+          test -n "$CLASPRC_JSON" || { echo "ERROR: CLASPRC_JSON is missing"; exit 1; }
+          echo "$CLASPRC_JSON" | jq -e '.token.refresh_token and .oauth2ClientSettings.clientId' >/dev/null \
+            || { echo "ERROR: CLASPRC_JSON format is invalid"; exit 1; }
+          if [ -z "$GAS_DEPLOYMENT_ID" ]; then
+            echo "WARN: GAS_DEPLOYMENT_ID is empty. New deployment URL may be created."
+          fi
+
       - name: Configure clasp auth
         run: |
           printf '%s' "${{ secrets.CLASPRC_JSON }}" > "$HOME/.clasprc.json"
