@@ -16,6 +16,8 @@ const soldRevenueValue = document.getElementById('soldRevenueValue');
 const lastUpdatedValue = document.getElementById('lastUpdatedValue');
 const soldCountLabel = document.getElementById('soldCountLabel');
 const unsoldCountLabel = document.getElementById('unsoldCountLabel');
+const soldPanel = document.getElementById('soldPanel');
+const unsoldPanel = document.getElementById('unsoldPanel');
 const soldSelectedCount = document.getElementById('soldSelectedCount');
 const unsoldSelectedCount = document.getElementById('unsoldSelectedCount');
 const soldTableBody = document.getElementById('soldTableBody');
@@ -29,6 +31,10 @@ const refreshButton = document.getElementById('refreshButton');
 const archiveButton = document.getElementById('archiveButton');
 const addButton = document.getElementById('addButton');
 const toast = document.getElementById('toast');
+const selectionMode = {
+  sold: false,
+  unsold: false
+};
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -125,6 +131,10 @@ async function handleBulkAction(status, event) {
   if (!button) return;
 
   const action = button.dataset.bulkAction;
+  if (action === 'toggle-selection') {
+    setSelectionMode(status, !selectionMode[status]);
+    return;
+  }
   if (action === 'select-all') {
     setRowsSelected(status, true);
     return;
@@ -180,6 +190,10 @@ function getBodyByStatus(status) {
   return status === 'sold' ? soldTableBody : unsoldTableBody;
 }
 
+function getPanelByStatus(status) {
+  return status === 'sold' ? soldPanel : unsoldPanel;
+}
+
 function getSelectedRows(status) {
   return Array.from(getBodyByStatus(status).querySelectorAll('tr[data-id]')).filter(function(row) {
     const checkbox = row.querySelector('[data-select-row]');
@@ -199,6 +213,23 @@ function updateSelectedCount(status) {
   const label = count + '件選択';
   if (status === 'sold' && soldSelectedCount) soldSelectedCount.textContent = label;
   if (status === 'unsold' && unsoldSelectedCount) unsoldSelectedCount.textContent = label;
+}
+
+function setSelectionMode(status, enabled) {
+  selectionMode[status] = enabled;
+  const panel = getPanelByStatus(status);
+  if (panel) {
+    panel.classList.toggle('selection-mode', enabled);
+    const toggleButton = panel.querySelector('[data-bulk-action="toggle-selection"]');
+    if (toggleButton) {
+      toggleButton.textContent = enabled ? '選択終了' : '選択';
+    }
+  }
+  if (!enabled) {
+    setRowsSelected(status, false);
+  } else {
+    updateSelectedCount(status);
+  }
 }
 
 async function reloadData(message) {
@@ -298,8 +329,8 @@ function render(data) {
     ? data.unsoldItems.map(renderUnsoldRow).join('')
     : '<tr class="table-empty"><td colspan="7">未販売在庫はまだありません。</td></tr>';
 
-  updateSelectedCount('sold');
-  updateSelectedCount('unsold');
+  setSelectionMode('sold', selectionMode.sold);
+  setSelectionMode('unsold', selectionMode.unsold);
 }
 
 function renderSoldRow(item) {

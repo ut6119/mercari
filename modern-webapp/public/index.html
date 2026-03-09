@@ -88,13 +88,20 @@
 
       .table-wrap { overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
       table { width: 100%; border-collapse: collapse; min-width: 0; table-layout: fixed; }
-      .compact-table .col-select { width: 7%; }
-      .compact-table .col-name { width: 28%; }
+      .compact-table .col-select { width: 0%; }
+      .compact-table .col-name { width: 29%; }
       .compact-table .col-revenue,
       .compact-table .col-shipping,
       .compact-table .col-cost,
-      .compact-table .col-profit { width: 13%; }
-      .compact-table .col-rate { width: 13%; }
+      .compact-table .col-profit { width: 14%; }
+      .compact-table .col-rate { width: 15%; }
+      .selection-mode .compact-table .col-select { width: 7%; }
+      .selection-mode .compact-table .col-name { width: 26%; }
+      .selection-mode .compact-table .col-revenue,
+      .selection-mode .compact-table .col-shipping,
+      .selection-mode .compact-table .col-cost,
+      .selection-mode .compact-table .col-profit { width: 13%; }
+      .selection-mode .compact-table .col-rate { width: 15%; }
       th, td {
         padding: 8px 5px;
         border-bottom: 1px solid #e8edf6;
@@ -121,12 +128,16 @@
         font-size: 11px;
         background: #fbfdff;
       }
+      th.selection-col,
+      td.selection-cell { display: none; }
+      .selection-mode th.selection-col,
+      .selection-mode td.selection-cell { display: table-cell; }
       .selection-cell { text-align: center; }
       .selection-cell input[type="checkbox"] { width: 16px; height: 16px; }
       .money, .rate, .center { text-align: right; }
       .pill {
-        display: inline-flex; align-items: center; justify-content: center; min-width: 82px;
-        padding: 7px 10px; border-radius: 999px; font-size: 12px; font-weight: 800;
+        display: inline-flex; align-items: center; justify-content: center; min-width: 58px;
+        padding: 6px 8px; border-radius: 999px; font-size: 11px; font-weight: 800;
       }
       .pill.good { background: #d9ead3; color: #1d5e2d; }
       .pill.bad { background: #f4cccc; color: #8f3030; }
@@ -158,6 +169,8 @@
         font-size: 11px;
         border-radius: 999px;
       }
+      .bulk-only { display: none; }
+      .selection-mode .bulk-only { display: inline-flex; }
       .bulk-count {
         margin-left: auto;
         font-size: 11px;
@@ -167,6 +180,7 @@
         border-radius: 999px;
         padding: 5px 10px;
       }
+      .selection-mode .bulk-count { display: inline-flex; }
       .hidden { display: none; }
       .toast {
         position: fixed; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 14px;
@@ -226,18 +240,19 @@
 
       <div class="layout">
         <div class="boards">
-          <section class="panel sold-panel">
+          <section class="panel sold-panel" id="soldPanel">
             <div class="board-head">
               <h3>販売済み</h3>
               <span id="soldCountLabel">0件</span>
             </div>
             <div class="bulk-toolbar" id="soldToolbar">
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="select-all">全選択</button>
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="clear-selection">解除</button>
-              <button class="button button-primary bulk-button" type="button" data-bulk-action="save">保存</button>
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="to-unsold">未販へ</button>
-              <button class="button button-danger bulk-button" type="button" data-bulk-action="delete">削除</button>
-              <span class="bulk-count" id="soldSelectedCount">0件選択</span>
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>
+              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="select-all">全選択</button>
+              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="clear-selection">解除</button>
+              <button class="button button-primary bulk-button bulk-only" type="button" data-bulk-action="save">保存</button>
+              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="to-unsold">未販へ</button>
+              <button class="button button-danger bulk-button bulk-only" type="button" data-bulk-action="delete">削除</button>
+              <span class="bulk-count bulk-only" id="soldSelectedCount">0件選択</span>
             </div>
             <div class="table-wrap">
               <table class="compact-table">
@@ -252,7 +267,7 @@
                 </colgroup>
                 <thead>
                   <tr>
-                    <th class="center">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                    <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
                     <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
                   </tr>
                 </thead>
@@ -261,18 +276,19 @@
             </div>
           </section>
 
-          <section class="panel unsold-panel">
+          <section class="panel unsold-panel" id="unsoldPanel">
             <div class="board-head">
               <h3>未販売在庫</h3>
               <span id="unsoldCountLabel">0件</span>
             </div>
             <div class="bulk-toolbar" id="unsoldToolbar">
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="select-all">全選択</button>
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="clear-selection">解除</button>
-              <button class="button button-primary bulk-button" type="button" data-bulk-action="save">保存</button>
-              <button class="button button-secondary bulk-button" type="button" data-bulk-action="to-sold">販売済へ</button>
-              <button class="button button-danger bulk-button" type="button" data-bulk-action="delete">削除</button>
-              <span class="bulk-count" id="unsoldSelectedCount">0件選択</span>
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="toggle-selection">選択</button>
+              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="select-all">全選択</button>
+              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="clear-selection">解除</button>
+              <button class="button button-primary bulk-button bulk-only" type="button" data-bulk-action="save">保存</button>
+              <button class="button button-secondary bulk-button bulk-only" type="button" data-bulk-action="to-sold">販売済へ</button>
+              <button class="button button-danger bulk-button bulk-only" type="button" data-bulk-action="delete">削除</button>
+              <span class="bulk-count bulk-only" id="unsoldSelectedCount">0件選択</span>
             </div>
             <div class="table-wrap">
               <table class="compact-table">
@@ -287,7 +303,7 @@
                 </colgroup>
                 <thead>
                   <tr>
-                    <th class="center">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                    <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
                     <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
                   </tr>
                 </thead>
