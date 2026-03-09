@@ -16,8 +16,12 @@ const soldRevenueValue = document.getElementById('soldRevenueValue');
 const lastUpdatedValue = document.getElementById('lastUpdatedValue');
 const soldCountLabel = document.getElementById('soldCountLabel');
 const unsoldCountLabel = document.getElementById('unsoldCountLabel');
+const soldSelectedCount = document.getElementById('soldSelectedCount');
+const unsoldSelectedCount = document.getElementById('unsoldSelectedCount');
 const soldTableBody = document.getElementById('soldTableBody');
 const unsoldTableBody = document.getElementById('unsoldTableBody');
+const soldToolbar = document.getElementById('soldToolbar');
+const unsoldToolbar = document.getElementById('unsoldToolbar');
 const quickAddForm = document.getElementById('quickAddForm');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
@@ -86,83 +90,115 @@ function bindEvents() {
     });
   });
 
-  soldTableBody.addEventListener('click', function(event) {
-    void handleSoldAction(event);
+  soldToolbar.addEventListener('click', function(event) {
+    void handleBulkAction('sold', event);
   });
-  unsoldTableBody.addEventListener('click', function(event) {
-    void handleUnsoldAction(event);
+  unsoldToolbar.addEventListener('click', function(event) {
+    void handleBulkAction('unsold', event);
   });
-}
-
-async function handleSoldAction(event) {
-  const button = event.target.closest('button[data-action]');
-  if (!button) return;
-  const row = button.closest('tr');
-  if (!row) return;
-  const id = row.dataset.id;
-  const action = button.dataset.action;
-
-  if (action === 'delete') {
-    if (!window.confirm('この商品を削除しますか？')) return;
-    await runApi(async function() {
-      const data = await request('/api/items/' + encodeURIComponent(id), { method: 'DELETE' });
-      render(data);
-      showToast('商品を削除しました。');
-    });
-    return;
-  }
-
-  const payload = readRowPayload(row, action === 'unsold' ? 'unsold' : 'sold');
-
-  await runApi(async function() {
-    const data = await request('/api/items', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    render(data);
-    showToast(action === 'unsold' ? '未販売在庫へ戻しました。' : '販売済み行を保存しました。');
+  soldTableBody.addEventListener('change', function(event) {
+    if (event.target.matches('[data-select-row]')) {
+      updateSelectedCount('sold');
+    }
   });
-}
-
-async function handleUnsoldAction(event) {
-  const button = event.target.closest('button[data-action]');
-  if (!button) return;
-  const row = button.closest('tr');
-  if (!row) return;
-  const id = row.dataset.id;
-  const action = button.dataset.action;
-
-  if (action === 'delete') {
-    if (!window.confirm('この商品を削除しますか？')) return;
-    await runApi(async function() {
-      const data = await request('/api/items/' + encodeURIComponent(id), { method: 'DELETE' });
-      render(data);
-      showToast('商品を削除しました。');
-    });
-    return;
-  }
-
-  const payload = readRowPayload(row, action === 'sell' ? 'sold' : 'unsold');
-
-  await runApi(async function() {
-    const data = await request('/api/items', {
-      method: 'POST',
-      body: JSON.stringify(payload)
-    });
-    render(data);
-    showToast(action === 'sell' ? '販売済みに移動しました。' : '未販売行を保存しました。');
+  unsoldTableBody.addEventListener('change', function(event) {
+    if (event.target.matches('[data-select-row]')) {
+      updateSelectedCount('unsold');
+    }
   });
 }
 
 function readRowPayload(row, status) {
+  const shippingRaw = row.querySelector('[data-field="shipping"]').value;
   return {
     id: row.dataset.id,
     status: status,
     name: row.querySelector('[data-field="name"]').value.trim(),
     revenue: row.querySelector('[data-field="revenue"]').value,
-    shipping: row.querySelector('[data-field="shipping"]').value,
+    shipping: shippingRaw === '' ? '160' : shippingRaw,
     cost: row.querySelector('[data-field="cost"]').value
   };
+}
+
+async function handleBulkAction(status, event) {
+  const button = event.target.closest('button[data-bulk-action]');
+  if (!button) return;
+
+  const action = button.dataset.bulkAction;
+  if (action === 'select-all') {
+    setRowsSelected(status, true);
+    return;
+  }
+  if (action === 'clear-selection') {
+    setRowsSelected(status, false);
+    return;
+  }
+
+  const selectedRows = getSelectedRows(status);
+  if (!selectedRows.length) {
+    showToast('先に行を選択してください。');
+    return;
+  }
+
+  if (action === 'delete') {
+    if (!window.confirm('選択した商品を削除しますか？')) return;
+  }
+
+  await runApi(async function() {
+    let latestData = null;
+    for (const row of selectedRows) {
+      const id = row.dataset.id;
+
+      if (action === 'delete') {
+        latestData = await request('/api/items/' + encodeURIComponent(id), { method: 'DELETE' });
+        continue;
+      }
+
+      let targetStatus = status;
+      if (action === 'to-sold') targetStatus = 'sold';
+      if (action === 'to-unsold') targetStatus = 'unsold';
+      const payload = readRowPayload(row, targetStatus);
+
+      latestData = await request('/api/items', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    }
+
+    render(latestData || await request('/api/dashboard'));
+    setRowsSelected('sold', false);
+    setRowsSelected('unsold', false);
+
+    if (action === 'save') showToast('選択行を保存しました。');
+    if (action === 'to-sold') showToast('選択行を販売済みに移動しました。');
+    if (action === 'to-unsold') showToast('選択行を未販売在庫へ移動しました。');
+    if (action === 'delete') showToast('選択行を削除しました。');
+  });
+}
+
+function getBodyByStatus(status) {
+  return status === 'sold' ? soldTableBody : unsoldTableBody;
+}
+
+function getSelectedRows(status) {
+  return Array.from(getBodyByStatus(status).querySelectorAll('tr[data-id]')).filter(function(row) {
+    const checkbox = row.querySelector('[data-select-row]');
+    return checkbox && checkbox.checked;
+  });
+}
+
+function setRowsSelected(status, checked) {
+  Array.from(getBodyByStatus(status).querySelectorAll('[data-select-row]')).forEach(function(checkbox) {
+    checkbox.checked = checked;
+  });
+  updateSelectedCount(status);
+}
+
+function updateSelectedCount(status) {
+  const count = getSelectedRows(status).length;
+  const label = count + '件選択';
+  if (status === 'sold' && soldSelectedCount) soldSelectedCount.textContent = label;
+  if (status === 'unsold' && unsoldSelectedCount) unsoldSelectedCount.textContent = label;
 }
 
 async function reloadData(message) {
@@ -233,7 +269,8 @@ async function runApi(fn) {
 }
 
 function togglePending(isPending) {
-  [refreshButton, archiveButton, addButton].forEach(function(button) {
+  const bulkButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
+  [refreshButton, archiveButton, addButton].concat(bulkButtons).forEach(function(button) {
     button.disabled = isPending;
   });
 }
@@ -260,6 +297,9 @@ function render(data) {
   unsoldTableBody.innerHTML = data.unsoldItems.length
     ? data.unsoldItems.map(renderUnsoldRow).join('')
     : '<tr class="table-empty"><td colspan="7">未販売在庫はまだありません。</td></tr>';
+
+  updateSelectedCount('sold');
+  updateSelectedCount('unsold');
 }
 
 function renderSoldRow(item) {
@@ -267,19 +307,13 @@ function renderSoldRow(item) {
   const rateClass = item.margin < 0 ? 'bad' : (item.margin >= 0.2 ? 'good' : 'neutral');
   return `
     <tr class="${rowClass}" data-id="${escapeHtml(item.id)}">
+      <td class="selection-cell"><input data-select-row type="checkbox" aria-label="選択"></td>
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
       <td><input data-field="revenue" type="number" min="0" step="1" value="${escapeHtml(String(item.revenue || ''))}"></td>
       <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String(item.shipping || 0))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill ${rateClass}">${formatPercent(item.margin)}</span></td>
-      <td class="actions">
-        <div class="inline-actions">
-          <button class="button button-primary mini" type="button" data-action="save">保存</button>
-          <button class="button button-secondary mini" type="button" data-action="unsold">未販へ</button>
-          <button class="button button-danger mini" type="button" data-action="delete">削除</button>
-        </div>
-      </td>
     </tr>
   `;
 }
@@ -287,19 +321,13 @@ function renderSoldRow(item) {
 function renderUnsoldRow(item) {
   return `
     <tr class="row-unsold" data-id="${escapeHtml(item.id)}">
+      <td class="selection-cell"><input data-select-row type="checkbox" aria-label="選択"></td>
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
       <td><input data-field="revenue" type="number" min="0" step="1" placeholder="0" value="${escapeHtml(String(item.revenue || ''))}"></td>
       <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String((item.shipping === '' || item.shipping === null || typeof item.shipping === 'undefined') ? 160 : item.shipping))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money">${formatSignedYen(item.profit)}</td>
-      <td class="rate"><span class="pill neutral">--</span></td>
-      <td class="actions">
-        <div class="inline-actions">
-          <button class="button button-secondary mini" type="button" data-action="save">保存</button>
-          <button class="button button-primary mini" type="button" data-action="sell">販売済へ</button>
-          <button class="button button-danger mini" type="button" data-action="delete">削除</button>
-        </div>
-      </td>
+      <td class="rate"><span class="pill neutral">${formatPercent(item.margin)}</span></td>
     </tr>
   `;
 }

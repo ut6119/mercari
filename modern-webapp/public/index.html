@@ -88,22 +88,20 @@
 
       .table-wrap { overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
       table { width: 100%; border-collapse: collapse; min-width: 0; table-layout: fixed; }
-      .compact-table .col-name { width: 24%; }
+      .compact-table .col-select { width: 7%; }
+      .compact-table .col-name { width: 28%; }
       .compact-table .col-revenue,
       .compact-table .col-shipping,
       .compact-table .col-cost,
-      .compact-table .col-profit { width: 11%; }
-      .compact-table .col-rate { width: 10%; }
-      .compact-table .col-actions { width: 22%; }
+      .compact-table .col-profit { width: 13%; }
+      .compact-table .col-rate { width: 13%; }
       th, td {
-        padding: 10px 6px;
+        padding: 8px 5px;
         border-bottom: 1px solid #e8edf6;
         text-align: left;
         vertical-align: middle;
-        font-size: 12px;
+        font-size: 11px;
         white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
       }
       th {
         position: sticky;
@@ -116,14 +114,15 @@
       }
       td input {
         min-width: 0;
-        padding: 8px 8px;
+        padding: 7px 6px;
         width: 100%;
         border: 1px solid var(--line);
         border-radius: 9px;
-        font-size: 12px;
+        font-size: 11px;
         background: #fbfdff;
       }
-      td.actions { white-space: normal; }
+      .selection-cell { text-align: center; }
+      .selection-cell input[type="checkbox"] { width: 16px; height: 16px; }
       .money, .rate, .center { text-align: right; }
       .pill {
         display: inline-flex; align-items: center; justify-content: center; min-width: 82px;
@@ -147,8 +146,27 @@
       .field input { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; background: #fff; }
       .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-      .inline-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-      .mini { width: 100%; padding: 7px 4px; font-size: 11px; border-radius: 10px; }
+      .bulk-toolbar {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .bulk-button {
+        padding: 7px 10px;
+        font-size: 11px;
+        border-radius: 999px;
+      }
+      .bulk-count {
+        margin-left: auto;
+        font-size: 11px;
+        color: #1f4b99;
+        background: #eaf1ff;
+        border: 1px solid #c8dafc;
+        border-radius: 999px;
+        padding: 5px 10px;
+      }
       .hidden { display: none; }
       .toast {
         position: fixed; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 14px;
@@ -164,9 +182,9 @@
         .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         th, td { padding: 6px 4px; font-size: 10px; }
-        td input { padding: 6px 6px; font-size: 10px; }
+        td input { padding: 6px 5px; font-size: 10px; }
         .pill { min-width: 54px; padding: 4px 6px; font-size: 10px; }
-        .mini { padding: 6px 2px; font-size: 10px; }
+        .bulk-button { padding: 6px 8px; font-size: 10px; }
         .board-head h3 { font-size: 17px; }
       }
     </style>
@@ -213,21 +231,29 @@
               <h3>販売済み</h3>
               <span id="soldCountLabel">0件</span>
             </div>
+            <div class="bulk-toolbar" id="soldToolbar">
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="select-all">全選択</button>
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="clear-selection">解除</button>
+              <button class="button button-primary bulk-button" type="button" data-bulk-action="save">保存</button>
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="to-unsold">未販へ</button>
+              <button class="button button-danger bulk-button" type="button" data-bulk-action="delete">削除</button>
+              <span class="bulk-count" id="soldSelectedCount">0件選択</span>
+            </div>
             <div class="table-wrap">
               <table class="compact-table">
                 <colgroup>
+                  <col class="col-select">
                   <col class="col-name">
                   <col class="col-revenue">
                   <col class="col-shipping">
                   <col class="col-cost">
                   <col class="col-profit">
                   <col class="col-rate">
-                  <col class="col-actions">
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th><th>操作</th>
+                    <th class="center">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
                   </tr>
                 </thead>
                 <tbody id="soldTableBody"></tbody>
@@ -240,21 +266,29 @@
               <h3>未販売在庫</h3>
               <span id="unsoldCountLabel">0件</span>
             </div>
+            <div class="bulk-toolbar" id="unsoldToolbar">
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="select-all">全選択</button>
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="clear-selection">解除</button>
+              <button class="button button-primary bulk-button" type="button" data-bulk-action="save">保存</button>
+              <button class="button button-secondary bulk-button" type="button" data-bulk-action="to-sold">販売済へ</button>
+              <button class="button button-danger bulk-button" type="button" data-bulk-action="delete">削除</button>
+              <span class="bulk-count" id="unsoldSelectedCount">0件選択</span>
+            </div>
             <div class="table-wrap">
               <table class="compact-table">
                 <colgroup>
+                  <col class="col-select">
                   <col class="col-name">
                   <col class="col-revenue">
                   <col class="col-shipping">
                   <col class="col-cost">
                   <col class="col-profit">
                   <col class="col-rate">
-                  <col class="col-actions">
                 </colgroup>
                 <thead>
                   <tr>
-                    <th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th><th>操作</th>
+                    <th class="center">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                    <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
                   </tr>
                 </thead>
                 <tbody id="unsoldTableBody"></tbody>
