@@ -8,6 +8,7 @@ const META_ID_COLUMN = 9;
 const META_STATUS_COLUMN = 10;
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
+const MIN_SHEET_ROWS = 20;
 
 function doGet(e) {
   if (isApiRequest_(e)) {
@@ -85,7 +86,7 @@ function saveItem(payload) {
   }
 
   writeSheetFromItems_(items);
-  return getDashboardData_();
+  return buildDashboardFromItems_(items);
 }
 
 function deleteItem(itemId) {
@@ -94,7 +95,51 @@ function deleteItem(itemId) {
   });
 
   writeSheetFromItems_(items);
-  return getDashboardData_();
+  return buildDashboardFromItems_(items);
+}
+
+function deleteItems(itemIds) {
+  const idSet = new Set(normalizeIdList_(itemIds));
+  if (idSet.size === 0) {
+    throw new Error('itemIds is required.');
+  }
+  const items = readItems_().filter(function(item) {
+    return !idSet.has(item.id);
+  });
+  writeSheetFromItems_(items);
+  return buildDashboardFromItems_(items);
+}
+
+function moveItems(itemIds, targetStatus) {
+  const idSet = new Set(normalizeIdList_(itemIds));
+  if (idSet.size === 0) {
+    throw new Error('itemIds is required.');
+  }
+  const status = normalizeStatus_(targetStatus);
+  if (status !== 'sold' && status !== 'unsold') {
+    throw new Error('targetStatus must be sold or unsold.');
+  }
+
+  const items = readItems_();
+  let movedCount = 0;
+  items.forEach(function(item) {
+    if (!idSet.has(item.id)) {
+      return;
+    }
+
+    if (status === 'sold' && parseNumber_(item.revenue) <= 0) {
+      throw new Error('販売済みに移動するには売上を入力してください。');
+    }
+    item.status = status;
+    movedCount += 1;
+  });
+
+  if (movedCount === 0) {
+    throw new Error('対象の商品が見つかりませんでした。');
+  }
+
+  writeSheetFromItems_(items);
+  return buildDashboardFromItems_(items);
 }
 
 function archiveMonthlyData() {
@@ -122,12 +167,15 @@ function archiveMonthlyData() {
   });
   writeSheetFromItems_(unsoldOnly, mainSheet);
 
-  return getDashboardData_();
+  return buildDashboardFromItems_(unsoldOnly);
 }
 
 function getDashboardData_() {
-  ensureSheet_();
   const items = readItems_();
+  return buildDashboardFromItems_(items);
+}
+
+function buildDashboardFromItems_(items) {
   const soldItems = items
     .filter(function(item) { return item.status === 'sold'; })
     .map(enrichItem_);
@@ -157,9 +205,11 @@ function ensureSheet_() {
     sheet.insertColumnsAfter(sheet.getMaxColumns(), META_STATUS_COLUMN - sheet.getMaxColumns());
   }
 
-  if (sheet.getMaxRows() < 20) {
-    sheet.insertRowsAfter(sheet.getMaxRows(), 20 - sheet.getMaxRows());
+  if (sheet.getMaxRows() < MIN_SHEET_ROWS) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), MIN_SHEET_ROWS - sheet.getMaxRows());
   }
+
+  configureSheetLayout_(sheet);
 
   if (sheet.getLastRow() === 0) {
     writeSheetFromItems_([], sheet);
@@ -174,7 +224,12 @@ function openSpreadsheet_() {
 
 function readItems_() {
   const sheet = ensureSheet_();
-  const totalRows = Math.max(sheet.getMaxRows() - DATA_START_ROW + 1, 0);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < DATA_START_ROW) {
+    return [];
+  }
+
+  const totalRows = Math.max(lastRow - DATA_START_ROW + 1, 0);
   if (totalRows <= 0) {
     return [];
   }
@@ -250,30 +305,9 @@ function writeSheetFromItems_(items, targetSheet) {
     .filter(function(item) { return item.status === 'unsold'; })
     .map(enrichItem_);
   const summary = buildSummary_(soldItems, unsoldItems);
-  const currentMaxRows = sheet.getMaxRows();
-  const requiredRows = Math.max(20, DATA_START_ROW + soldItems.length + unsoldItems.length + 6);
-
-  if (currentMaxRows < requiredRows) {
-    sheet.insertRowsAfter(currentMaxRows, requiredRows - currentMaxRows);
-  }
-
-  if (sheet.getMaxColumns() < META_STATUS_COLUMN) {
-    sheet.insertColumnsAfter(sheet.getMaxColumns(), META_STATUS_COLUMN - sheet.getMaxColumns());
-  }
-
-  // Avoid clearFormat on typed columns; it can throw in some Sheets setups.
-  sheet.getRange(1, 1, sheet.getMaxRows(), META_STATUS_COLUMN).clearContent();
-  sheet.setFrozenRows(1);
-  sheet.setColumnWidths(1, 1, 210);
-  sheet.setColumnWidths(2, 7, 110);
-  sheet.hideColumns(META_ID_COLUMN, 2);
-
-  sheet.getRange(HEADER_ROW, 1, 1, VISIBLE_COLUMN_COUNT).setValues([[
-    '名前', '売上', '手数料', '送料', '原価', '利益', '利益率', '合計収支'
-  ]]);
-
-  let rowPointer = SUMMARY_ROW;
-  sheet.getRange(rowPointer, 1, 1, META_STATUS_COLUMN).setValues([[
+  const rows = [];
+  rows.push(['名前', '売上', '手数料', '送料', '原価', '利益', '利益率', '合計収支', '', '']);
+  rows.push([
     '【販売済み合計】',
     summary.soldRevenue,
     summary.soldFee,
@@ -284,15 +318,10 @@ function writeSheetFromItems_(items, targetSheet) {
     summary.soldProfit,
     'summary-sold',
     'summary'
-  ]]);
-  styleSummaryRow_(sheet.getRange(rowPointer, 1, 1, VISIBLE_COLUMN_COUNT), '#dfe6ee');
-  applyCurrencyFormat_(sheet.getRange(rowPointer, 2, 1, 5));
-  applyPercentFormat_(sheet.getRange(rowPointer, 7, 1, 1));
-  applyCurrencyFormat_(sheet.getRange(rowPointer, 8, 1, 1));
-  rowPointer += 1;
+  ]);
 
   soldItems.forEach(function(item) {
-    sheet.getRange(rowPointer, 1, 1, META_STATUS_COLUMN).setValues([[
+    rows.push([
       item.name,
       item.revenue,
       item.fee,
@@ -303,14 +332,11 @@ function writeSheetFromItems_(items, targetSheet) {
       '',
       item.id,
       'sold'
-    ]]);
-    styleSoldRow_(sheet, rowPointer, item);
-    rowPointer += 1;
+    ]);
   });
 
-  rowPointer += 1;
-
-  sheet.getRange(rowPointer, 1, 1, META_STATUS_COLUMN).setValues([[
+  rows.push(['', '', '', '', '', '', '', '', '', '']);
+  rows.push([
     '【未販売在庫】',
     '',
     '',
@@ -321,14 +347,10 @@ function writeSheetFromItems_(items, targetSheet) {
     summary.overallNet,
     'summary-unsold',
     'summary'
-  ]]);
-  styleSummaryRow_(sheet.getRange(rowPointer, 1, 1, VISIBLE_COLUMN_COUNT), '#f8e4cc');
-  applyCurrencyFormat_(sheet.getRange(rowPointer, 5, 1, 2));
-  applyCurrencyFormat_(sheet.getRange(rowPointer, 8, 1, 1));
-  rowPointer += 1;
+  ]);
 
   unsoldItems.forEach(function(item) {
-    sheet.getRange(rowPointer, 1, 1, META_STATUS_COLUMN).setValues([[
+    rows.push([
       item.name,
       item.revenue || '',
       item.fee || '',
@@ -339,16 +361,86 @@ function writeSheetFromItems_(items, targetSheet) {
       '',
       item.id,
       'unsold'
-    ]]);
-    styleUnsoldRow_(sheet, rowPointer);
-    rowPointer += 1;
+    ]);
   });
 
-  if (rowPointer <= sheet.getMaxRows()) {
-    sheet.getRange(rowPointer, 1, sheet.getMaxRows() - rowPointer + 1, META_STATUS_COLUMN).clearContent();
+  const usedRows = rows.length;
+  const currentMaxRows = sheet.getMaxRows();
+  const requiredRows = Math.max(MIN_SHEET_ROWS, usedRows + 2);
+
+  if (currentMaxRows < requiredRows) {
+    sheet.insertRowsAfter(currentMaxRows, requiredRows - currentMaxRows);
   }
 
+  if (sheet.getMaxColumns() < META_STATUS_COLUMN) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), META_STATUS_COLUMN - sheet.getMaxColumns());
+  }
+
+  // Avoid clearFormat on typed columns; it can throw in some Sheets setups.
+  const clearRows = Math.max(sheet.getLastRow(), usedRows, MIN_SHEET_ROWS);
+  sheet.getRange(HEADER_ROW, 1, 1, VISIBLE_COLUMN_COUNT).setValues([rows[0].slice(0, VISIBLE_COLUMN_COUNT)]);
+  if (clearRows > 1) {
+    sheet.getRange(2, 1, clearRows - 1, META_STATUS_COLUMN).clearContent();
+  }
+  if (usedRows > 1) {
+    sheet.getRange(2, 1, usedRows - 1, META_STATUS_COLUMN).setValues(rows.slice(1));
+  }
+
+  const soldSummaryRow = SUMMARY_ROW;
+  const soldStartRow = DATA_START_ROW;
+  const unsoldSummaryRow = soldStartRow + soldItems.length + 1;
+  const unsoldStartRow = unsoldSummaryRow + 1;
+
   styleHeaderRow_(sheet.getRange(HEADER_ROW, 1, 1, VISIBLE_COLUMN_COUNT));
+  if (clearRows > 1) {
+    sheet.getRange(2, 1, clearRows - 1, VISIBLE_COLUMN_COUNT)
+      .setBackground(null)
+      .setFontWeight('normal')
+      .setHorizontalAlignment('center');
+  }
+
+  styleSummaryRow_(sheet.getRange(soldSummaryRow, 1, 1, VISIBLE_COLUMN_COUNT), '#dfe6ee');
+  styleSummaryRow_(sheet.getRange(unsoldSummaryRow, 1, 1, VISIBLE_COLUMN_COUNT), '#f8e4cc');
+
+  if (soldItems.length > 0) {
+    const soldRowBackgrounds = soldItems.map(function(item) {
+      if (item.margin !== null && item.margin >= 0.2) {
+        return ['#d9ead3', '#d9ead3', '#d9ead3', '#d9ead3', '#d9ead3', '#d9ead3', '#d9ead3', '#d9ead3'];
+      }
+      if (item.profit < 0 || (item.margin !== null && item.margin < 0)) {
+        return ['#f4cccc', '#f4cccc', '#f4cccc', '#f4cccc', '#f4cccc', '#f4cccc', '#f4cccc', '#f4cccc'];
+      }
+      return [null, null, null, null, null, null, null, null];
+    });
+    const soldFeeColumnBackgrounds = soldItems.map(function(item) {
+      if (item.margin !== null && item.margin >= 0.2) {
+        return ['#cfd8cb'];
+      }
+      if (item.profit < 0 || (item.margin !== null && item.margin < 0)) {
+        return ['#eab7b7'];
+      }
+      return ['#ececec'];
+    });
+    sheet.getRange(soldStartRow, 1, soldItems.length, VISIBLE_COLUMN_COUNT)
+      .setBackgrounds(soldRowBackgrounds)
+      .setHorizontalAlignment('center')
+      .setFontWeight('normal');
+    sheet.getRange(soldStartRow, 3, soldItems.length, 1).setBackgrounds(soldFeeColumnBackgrounds);
+  }
+
+  if (unsoldItems.length > 0) {
+    sheet.getRange(unsoldStartRow, 1, unsoldItems.length, VISIBLE_COLUMN_COUNT)
+      .setBackground('#fff7e8')
+      .setHorizontalAlignment('center')
+      .setFontWeight('normal');
+  }
+}
+
+function configureSheetLayout_(sheet) {
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidths(1, 1, 210);
+  sheet.setColumnWidths(2, 7, 110);
+  sheet.hideColumns(META_ID_COLUMN, 2);
 }
 
 function sanitizePayload_(payload) {
@@ -528,6 +620,16 @@ function parseOptionalNumber_(value) {
   return parseNumber_(value);
 }
 
+function normalizeIdList_(value) {
+  if (Array.isArray(value)) {
+    return value.map(function(v) { return String(v || '').trim(); }).filter(Boolean);
+  }
+  return String(value || '')
+    .split(',')
+    .map(function(v) { return String(v || '').trim(); })
+    .filter(Boolean);
+}
+
 function isRowCompletelyEmpty_(values) {
   return values.every(function(value) {
     return value === '' || value === null;
@@ -600,6 +702,27 @@ function parseApiGetPayload_(e) {
     return { action: 'archive' };
   }
 
+  if (action === 'bulk') {
+    const op = String(p.op || p.bulkAction || '').trim().toLowerCase();
+    const itemIds = normalizeIdList_(p.itemIds || p.ids || '');
+    if (op === 'delete') {
+      return {
+        action: 'bulk',
+        op: 'delete',
+        itemIds: itemIds
+      };
+    }
+    if (op === 'move') {
+      return {
+        action: 'bulk',
+        op: 'move',
+        itemIds: itemIds,
+        targetStatus: String(p.targetStatus || p.status || '').trim().toLowerCase()
+      };
+    }
+    throw new Error('Unknown bulk op: ' + op);
+  }
+
   if (action === 'dashboard') {
     return { action: 'dashboard' };
   }
@@ -659,6 +782,17 @@ function runApiAction_(payload) {
 
   if (action === 'archive') {
     return archiveMonthlyData();
+  }
+
+  if (action === 'bulk') {
+    const op = String(payload.op || payload.bulkAction || '').trim().toLowerCase();
+    if (op === 'delete') {
+      return deleteItems(payload.itemIds || payload.ids || []);
+    }
+    if (op === 'move') {
+      return moveItems(payload.itemIds || payload.ids || [], payload.targetStatus || payload.status || '');
+    }
+    throw new Error('Unknown bulk op: ' + op);
   }
 
   throw new Error('Unknown action: ' + action);

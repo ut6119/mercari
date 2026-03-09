@@ -2,6 +2,8 @@ let currentData = null;
 let draftStatus = 'unsold';
 let pending = false;
 let toastTimer = null;
+const AUTO_SAVE_DELAY_MS = 420;
+const autoSaveState = {};
 const LOCAL_API_ORIGIN = 'http://localhost:3000';
 const GAS_API_ENDPOINT = (window.APP_CONFIG && window.APP_CONFIG.gasEndpoint)
   || 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec';
@@ -105,11 +107,6 @@ function bindEvents() {
   soldTableBody.addEventListener('change', function(event) {
     if (event.target.matches('[data-select-row]')) {
       updateSelectedCount('sold');
-      return;
-    }
-    if (event.target.matches('[data-field]')) {
-      const row = event.target.closest('tr[data-id]');
-      void autoSaveRow(row, 'sold');
     }
   });
   soldTableBody.addEventListener('input', function(event) {
@@ -117,16 +114,12 @@ function bindEvents() {
       const row = event.target.closest('tr[data-id]');
       updateRowPreview(row, 'sold');
       recalcSummaryFromDom();
+      scheduleAutoSave(row, 'sold');
     }
   });
   unsoldTableBody.addEventListener('change', function(event) {
     if (event.target.matches('[data-select-row]')) {
       updateSelectedCount('unsold');
-      return;
-    }
-    if (event.target.matches('[data-field]')) {
-      const row = event.target.closest('tr[data-id]');
-      void autoSaveRow(row, 'unsold');
     }
   });
   unsoldTableBody.addEventListener('input', function(event) {
@@ -134,6 +127,7 @@ function bindEvents() {
       const row = event.target.closest('tr[data-id]');
       updateRowPreview(row, 'unsold');
       recalcSummaryFromDom();
+      scheduleAutoSave(row, 'unsold');
     }
   });
 }
@@ -180,23 +174,50 @@ async function handleBulkAction(status, event) {
 
   await runApi(async function() {
     let latestData = null;
-    for (const row of selectedRows) {
-      const id = row.dataset.id;
 
-      if (action === 'delete') {
-        latestData = await request('/api/items/' + encodeURIComponent(id), { method: 'DELETE' });
-        continue;
+    await flushAutoSavesForRows(selectedRows, status);
+    const selectedIds = selectedRows.map(function(row) { return row.dataset.id; }).filter(Boolean);
+
+    if (!USE_LOCAL_API && (action === 'delete' || action === 'to-sold' || action === 'to-unsold')) {
+      if (action === 'to-sold') {
+        const invalidRow = selectedRows.find(function(row) {
+          return sanitizeAmount_(row.querySelector('[data-field="revenue"]').value) <= 0;
+        });
+        if (invalidRow) {
+          throw new Error('販売済みに移動する行は売上を入力してください。');
+        }
       }
-
-      let targetStatus = status;
-      if (action === 'to-sold') targetStatus = 'sold';
-      if (action === 'to-unsold') targetStatus = 'unsold';
-      const payload = readRowPayload(row, targetStatus);
-
-      latestData = await request('/api/items', {
+      latestData = await request('/api/items/bulk', {
         method: 'POST',
-        body: JSON.stringify(payload)
+        body: JSON.stringify(
+          action === 'delete'
+            ? { action: 'deleteMany', itemIds: selectedIds }
+            : {
+              action: 'moveMany',
+              itemIds: selectedIds,
+              targetStatus: action === 'to-sold' ? 'sold' : 'unsold'
+            }
+        )
       });
+    } else {
+      for (const row of selectedRows) {
+        const id = row.dataset.id;
+
+        if (action === 'delete') {
+          latestData = await request('/api/items/' + encodeURIComponent(id), { method: 'DELETE' });
+          continue;
+        }
+
+        let targetStatus = status;
+        if (action === 'to-sold') targetStatus = 'sold';
+        if (action === 'to-unsold') targetStatus = 'unsold';
+        const payload = readRowPayload(row, targetStatus);
+
+        latestData = await request('/api/items', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+      }
     }
 
     render(latestData || await request('/api/dashboard'));
@@ -256,18 +277,65 @@ function setSelectionMode(status, enabled) {
   }
 }
 
-async function autoSaveRow(row, status) {
+function scheduleAutoSave(row, status) {
   if (!row || !row.dataset.id) return;
-
+  const rowId = row.dataset.id;
   const payload = readRowPayload(row, status);
+  if (!autoSaveState[rowId]) {
+    autoSaveState[rowId] = { timer: null, inFlight: false, queued: null };
+  }
+  const state = autoSaveState[rowId];
+  state.queued = payload;
+  if (state.timer) {
+    clearTimeout(state.timer);
+  }
+  state.timer = setTimeout(function() {
+    state.timer = null;
+    void flushAutoSaveById(rowId);
+  }, AUTO_SAVE_DELAY_MS);
+}
+
+async function flushAutoSavesForRows(rows, fallbackStatus) {
+  for (const row of rows) {
+    const rowId = row && row.dataset ? row.dataset.id : '';
+    if (!rowId) continue;
+    if (!autoSaveState[rowId]) {
+      autoSaveState[rowId] = { timer: null, inFlight: false, queued: null };
+    }
+    const state = autoSaveState[rowId];
+    state.queued = readRowPayload(row, fallbackStatus);
+    if (state.timer) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
+    await flushAutoSaveById(rowId);
+  }
+}
+
+async function flushAutoSaveById(rowId) {
+  const state = autoSaveState[rowId];
+  if (!state || !state.queued) return;
+  if (state.inFlight) return;
+
+  const payload = state.queued;
+  state.queued = null;
+  state.inFlight = true;
   try {
     const data = await request('/api/items', {
       method: 'POST',
       body: JSON.stringify(payload)
     });
-    render(data);
+    currentData = data;
+    if (data && data.summary) {
+      applySummary(data.summary, data.lastUpdated);
+    }
   } catch (error) {
     showToast(error.message || '自動保存に失敗しました。');
+  } finally {
+    state.inFlight = false;
+    if (state.queued) {
+      void flushAutoSaveById(rowId);
+    }
   }
 }
 
@@ -307,6 +375,19 @@ async function request(url, options) {
     const itemId = decodeURIComponent(url.split('/').pop() || '');
     params.set('api', 'delete');
     params.set('itemId', itemId);
+  } else if (url === '/api/items/bulk' && method === 'POST') {
+    const payload = options && options.body ? JSON.parse(options.body) : {};
+    params.set('api', 'bulk');
+    if (payload.action === 'deleteMany') {
+      params.set('op', 'delete');
+      params.set('ids', Array.isArray(payload.itemIds) ? payload.itemIds.join(',') : '');
+    } else if (payload.action === 'moveMany') {
+      params.set('op', 'move');
+      params.set('ids', Array.isArray(payload.itemIds) ? payload.itemIds.join(',') : '');
+      params.set('targetStatus', String(payload.targetStatus || '').trim().toLowerCase());
+    } else {
+      throw new Error('未対応の一括処理です。');
+    }
   } else {
     throw new Error('未対応のAPI呼び出しです。');
   }
