@@ -33,8 +33,19 @@
         box-shadow: 0 16px 36px rgba(15, 33, 68, 0.1);
       }
       .hero {
+        position: relative;
         padding: 24px;
         background: linear-gradient(140deg, rgba(42, 127, 255, 0.11), rgba(20, 184, 166, 0.08) 58%, rgba(255, 255, 255, 0.95));
+      }
+      .hero-mascot {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: clamp(90px, 14vw, 180px);
+        height: auto;
+        pointer-events: none;
+        user-select: none;
+        filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.12));
       }
       .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
       .title { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1; letter-spacing: -0.04em; }
@@ -215,6 +226,7 @@
       @media (max-width: 720px) {
         .shell { width: min(100vw - 12px, 100%); margin: 12px auto 28px; }
         .hero, .panel { padding: 16px; }
+        .hero-mascot { width: 76px; top: 6px; right: 6px; }
         .hero-top { flex-direction: column; }
         .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -229,6 +241,7 @@
   <body>
     <div class="shell">
       <section class="hero">
+        <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
         <div class="hero-top">
           <h1 class="title">メルカリ収支アプリ</h1>
           <div class="hero-actions">
@@ -370,6 +383,7 @@
     <script>
       window.APP_CONFIG = {
         gasEndpoint: 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec',
+        heroGifUrl: './assets/mascot.gif',
         firebase: {
           enabled: true,
           collection: 'mercari_items',

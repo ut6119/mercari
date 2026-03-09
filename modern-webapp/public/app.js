@@ -45,6 +45,7 @@ const refreshButton = document.getElementById('refreshButton');
 const archiveButton = document.getElementById('archiveButton');
 const addButton = document.getElementById('addButton');
 const toast = document.getElementById('toast');
+const heroMascot = document.getElementById('heroMascot');
 const selectionMode = {
   sold: false,
   unsold: false
@@ -58,10 +59,26 @@ init().catch(function(error) {
 });
 
 async function init() {
+  setupHeroMascot_();
   await initializeBackend();
   bindEvents();
   document.querySelector('[data-status-tab="unsold"]').click();
   await reloadData('最新状態を読み込みました。');
+}
+
+function setupHeroMascot_() {
+  if (!heroMascot) return;
+  const configuredUrl = window.APP_CONFIG && window.APP_CONFIG.heroGifUrl
+    ? String(window.APP_CONFIG.heroGifUrl).trim()
+    : '';
+  if (!configuredUrl) {
+    heroMascot.style.display = 'none';
+    return;
+  }
+  heroMascot.src = configuredUrl;
+  heroMascot.onerror = function() {
+    heroMascot.style.display = 'none';
+  };
 }
 
 async function initializeBackend() {
