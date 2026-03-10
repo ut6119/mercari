@@ -71,6 +71,7 @@ const transportInput = document.getElementById('transportInput');
 const transportClearButton = document.getElementById('transportClearButton');
 const transportLedgerBody = document.getElementById('transportLedgerBody');
 const transportLedgerForm = document.getElementById('transportLedgerForm');
+const transportPresetSwitch = document.getElementById('transportPresetSwitch');
 const transportDateInput = document.getElementById('transportDateInput');
 const transportAmountInput = document.getElementById('transportAmountInput');
 const transportPlaceInput = document.getElementById('transportPlaceInput');
@@ -113,7 +114,14 @@ const TRANSPORT_PRESET_VALUES = {
   umeda: 680,
   other: null
 };
+const TRANSPORT_PRESET_LABELS = {
+  tennoji: '天王寺',
+  namba: '難波',
+  umeda: '梅田',
+  other: 'その他'
+};
 let selectedTransportPreset = '';
+let selectedTransportLedgerPreset = '';
 let transportLedger = loadTransportLedger_();
 
 init().catch(function(error) {
@@ -132,6 +140,7 @@ async function init() {
   bindEvents();
   renderTransportLedger_();
   setDefaultTransportDate_();
+  applyTransportLedgerPreset_('');
   closeQuickAddModal_({ keepHomeView: true });
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
@@ -443,10 +452,22 @@ function bindEvents() {
       }
     });
   }
+  if (transportPresetSwitch) {
+    transportPresetSwitch.addEventListener('click', function(event) {
+      const button = event.target.closest('button[data-transport-ledger-preset]');
+      if (!button) return;
+      const preset = String(button.dataset.transportLedgerPreset || '').trim();
+      applyTransportLedgerPreset_(preset);
+      if (preset === 'other' && transportAmountInput) {
+        transportAmountInput.focus();
+      }
+    });
+  }
   if (transportClearButton) {
     transportClearButton.addEventListener('click', function() {
       void runApi(async function() {
         applyTransportPreset_('');
+        applyTransportLedgerPreset_('');
         await clearSoldTransport_();
       });
     });
@@ -547,6 +568,7 @@ function bindEvents() {
         saveTransportLedger_();
         renderTransportLedger_();
         transportLedgerForm.reset();
+        applyTransportLedgerPreset_('');
         setDefaultTransportDate_();
         if (currentData && currentData.summary) {
           applySummary(currentData.summary, currentData.lastUpdated);
@@ -1028,6 +1050,47 @@ function applyTransportPreset_(preset, options) {
   transportInput.readOnly = true;
   transportInput.placeholder = '';
   transportInput.value = String(TRANSPORT_PRESET_VALUES[normalizedPreset] || 0);
+}
+
+function applyTransportLedgerPreset_(preset) {
+  const candidate = String(preset || '').trim().toLowerCase();
+  const normalizedPreset = Object.prototype.hasOwnProperty.call(TRANSPORT_PRESET_VALUES, candidate)
+    ? candidate
+    : '';
+  selectedTransportLedgerPreset = normalizedPreset;
+
+  document.querySelectorAll('[data-transport-ledger-preset]').forEach(function(button) {
+    button.classList.toggle('active', button.dataset.transportLedgerPreset === normalizedPreset);
+  });
+
+  if (!transportAmountInput || !transportPlaceInput) return;
+
+  if (!normalizedPreset) {
+    transportAmountInput.readOnly = true;
+    transportAmountInput.placeholder = 'ボタン選択で入力';
+    transportAmountInput.value = '';
+    transportPlaceInput.readOnly = true;
+    transportPlaceInput.placeholder = 'ボタン選択で入力';
+    transportPlaceInput.value = '';
+    return;
+  }
+
+  if (normalizedPreset === 'other') {
+    transportAmountInput.readOnly = false;
+    transportAmountInput.placeholder = '0';
+    transportAmountInput.value = '';
+    transportPlaceInput.readOnly = false;
+    transportPlaceInput.placeholder = '場所を入力';
+    transportPlaceInput.value = '';
+    return;
+  }
+
+  transportAmountInput.readOnly = true;
+  transportAmountInput.placeholder = '';
+  transportAmountInput.value = String(TRANSPORT_PRESET_VALUES[normalizedPreset] || 0);
+  transportPlaceInput.readOnly = true;
+  transportPlaceInput.placeholder = '';
+  transportPlaceInput.value = TRANSPORT_PRESET_LABELS[normalizedPreset] || '';
 }
 
 function getQuickAddTransportAmount_() {

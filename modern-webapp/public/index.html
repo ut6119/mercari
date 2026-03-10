@@ -723,6 +723,12 @@
                 </table>
               </div>
               <form id="transportLedgerForm" class="form-grid transport-ledger-form">
+                <div class="transport-switch" id="transportPresetSwitch">
+                  <button class="transport-button" type="button" data-transport-ledger-preset="tennoji">天王寺</button>
+                  <button class="transport-button" type="button" data-transport-ledger-preset="namba">難波</button>
+                  <button class="transport-button" type="button" data-transport-ledger-preset="umeda">梅田</button>
+                  <button class="transport-button" type="button" data-transport-ledger-preset="other">その他</button>
+                </div>
                 <div class="field-row">
                   <div class="field">
                     <label for="transportDateInput">日付</label>
@@ -730,11 +736,11 @@
                   </div>
                   <div class="field">
                     <label for="transportAmountInput">金額</label>
-                    <input id="transportAmountInput" name="amount" type="number" min="1" step="1" placeholder="0">
+                    <input id="transportAmountInput" name="amount" type="number" min="1" step="1" placeholder="ボタン選択で入力" readonly>
                   </div>
                   <div class="field">
                     <label for="transportPlaceInput">場所</label>
-                    <input id="transportPlaceInput" name="place" type="text" placeholder="例: 天王寺">
+                    <input id="transportPlaceInput" name="place" type="text" placeholder="ボタン選択で入力" readonly>
                   </div>
                 </div>
                 <button class="button button-primary transport-ledger-submit" id="transportAddButton" type="submit">交通費を追加</button>
