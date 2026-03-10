@@ -1,6 +1,6 @@
 window.APP_RUNTIME_CONFIG = {
   gasEndpoint: '',
-  apiWriteToken: '',
+  apiWriteToken: 'cfef1157e29cbc2ef2ffb01d32811a7dbd7ea47ea405439e',
   heroGifUrl: '',
   firebase: {
     enabled: false,
