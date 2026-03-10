@@ -282,7 +282,7 @@ function readItemsFromSheet_(sheet) {
       return;
     }
 
-    if (!name && !hasItemBody_(row)) {
+    if (!name) {
       return;
     }
 
@@ -308,7 +308,7 @@ function readItemsFromSheet_(sheet) {
   });
 
   return items.filter(function(item) {
-    return item.name || item.revenue || item.cost;
+    return Boolean(item.name);
   });
 }
 

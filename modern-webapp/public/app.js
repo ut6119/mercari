@@ -416,7 +416,7 @@ function bindEvents() {
       const target = String(button.dataset.viewTab || '').trim();
       if (!target) return;
       activateView_(target);
-      if (target === 'monthly' || target === 'chart') {
+      if ((target === 'monthly' || target === 'chart') && monthlyState.months.length === 0) {
         void loadMonthlyData_({ forceGas: true });
       }
     });
