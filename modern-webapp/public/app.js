@@ -980,18 +980,21 @@ async function loadMonthlyData_(options) {
     let data;
     if (backendMode === 'firebase') {
       data = await firebaseLoadMonthly_();
-      const firebaseMonths = Array.isArray(data && data.months) ? data.months : [];
-      if (!firebaseMonths.length) {
-        data = await loadMonthlyDataFromGas_();
-      }
     } else {
       data = await loadMonthlyDataFromGas_();
     }
     const currentMonth = getCurrentMonthLabel_();
-    const months = (Array.isArray(data && data.months) ? data.months : [])
+    let months = (Array.isArray(data && data.months) ? data.months : [])
       .filter(function(entry) {
         return entry && String(entry.month || '').trim() !== currentMonth;
       });
+    if (backendMode === 'firebase' && months.length === 0) {
+      const gasData = await loadMonthlyDataFromGas_();
+      months = (Array.isArray(gasData && gasData.months) ? gasData.months : [])
+        .filter(function(entry) {
+          return entry && String(entry.month || '').trim() !== currentMonth;
+        });
+    }
     monthlyState.months = months;
     if (!months.length) {
       monthlyState.selectedMonth = '';
