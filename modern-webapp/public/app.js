@@ -198,21 +198,21 @@ async function initializeBackend() {
   }
 
   if (!window.firebase || !window.firebase.firestore) {
-    backendMode = 'gas';
-    showToast('Firebase SDKが未読み込みのためGASモードで動作します。');
+    backendMode = 'firebase-required';
+    showToast('Firebase SDKが未読み込みです。');
     return;
   }
 
   const config = FIREBASE_OPTIONS.config || {};
   if (!config.projectId || !config.apiKey || !config.appId || isPlaceholderValue_(config.apiKey)) {
-    backendMode = 'gas';
-    showToast('Firebase設定が不完全のためGASモードで動作します。');
+    backendMode = 'firebase-required';
+    showToast('Firebase設定が不完全です。');
     return;
   }
 
   const app = getOrCreateFirebaseApp_(config);
   if (!activateFirebaseAppCheck_(app, FIREBASE_OPTIONS.appCheck || {})) {
-    backendMode = 'gas';
+    backendMode = 'firebase-required';
     return;
   }
   firebaseDb = window.firebase.firestore(app);
@@ -305,17 +305,16 @@ function isPlaceholderValue_(value) {
 
 function activateFirebaseAppCheck_(app, options) {
   if (!options || options.enabled !== true) {
-    showToast('Firebase App Checkが無効のためGASモードで動作します。');
-    return false;
+    return true;
   }
   if (!window.firebase || !window.firebase.appCheck) {
-    showToast('Firebase App Check SDKが未読み込みのためGASモードで動作します。');
+    showToast('Firebase App Check SDKが未読み込みです。');
     return false;
   }
 
   const siteKey = String(options.siteKey || '').trim();
   if (!siteKey || isPlaceholderValue_(siteKey)) {
-    showToast('Firebase App CheckのsiteKey未設定のためGASモードで動作します。');
+    showToast('Firebase App CheckのsiteKey未設定です。');
     return false;
   }
 
@@ -329,7 +328,7 @@ function activateFirebaseAppCheck_(app, options) {
     return true;
   } catch (error) {
     console.error(error);
-    showToast('Firebase App Check初期化に失敗したためGASモードで動作します。');
+    showToast('Firebase App Check初期化に失敗しました。');
     return false;
   }
 }
@@ -867,6 +866,9 @@ async function refreshDashboardInBackground_() {
 
 async function request(url, options) {
   const method = String((options && options.method) || 'GET').toUpperCase();
+  if (backendMode === 'firebase-required') {
+    throw new Error('Firebase接続に失敗しました。設定を確認してください。');
+  }
   if (method !== 'GET' && REQUIRE_LOGIN && !signedInIdToken && backendMode !== 'local') {
     throw new Error('編集にはGoogleログインが必要です。');
   }
@@ -900,10 +902,14 @@ async function request(url, options) {
 async function loadMonthlyData_(options) {
   const opts = options || {};
   try {
-    const params = new URLSearchParams();
-    params.set('api', 'monthly');
-    params.set('_ts', String(Date.now()));
-    const data = await requestFromGasParams_(params, { requireSummary: false });
+    const data = backendMode === 'firebase'
+      ? await firebaseLoadMonthly_()
+      : await (async function() {
+        const params = new URLSearchParams();
+        params.set('api', 'monthly');
+        params.set('_ts', String(Date.now()));
+        return requestFromGasParams_(params, { requireSummary: false });
+      })();
     const months = Array.isArray(data && data.months) ? data.months : [];
     monthlyState.months = months;
     if (!months.length) {
@@ -1183,6 +1189,92 @@ async function firebaseArchive_() {
     return item.status !== 'sold';
   });
   return buildDashboardDataFromItems_(firebaseItemsCache, archivedAt);
+}
+
+async function firebaseLoadMonthly_() {
+  await firebaseLoadDashboard_();
+
+  const monthMap = new Map();
+  const archiveSnapshot = await firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).get();
+  for (const doc of archiveSnapshot.docs) {
+    const month = String(doc.id || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      continue;
+    }
+    const itemsSnapshot = await doc.ref.collection('items').get();
+    const archiveItems = itemsSnapshot.docs.map(function(itemDoc) {
+      const data = itemDoc.data() || {};
+      return {
+        id: itemDoc.id,
+        status: normalizeStatusValue_(data.status) || 'sold',
+        name: String(data.name || '').trim(),
+        revenue: sanitizeAmount_(data.revenue),
+        shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
+        cost: sanitizeAmount_(data.cost)
+      };
+    });
+    const soldItems = archiveItems
+      .filter(function(item) { return item.status === 'sold'; })
+      .map(enrichItem_);
+    const unsoldItems = archiveItems
+      .filter(function(item) { return item.status === 'unsold'; })
+      .map(enrichItem_);
+    monthMap.set(month, {
+      month: month,
+      summary: buildSummary_(soldItems, unsoldItems),
+      soldItems: soldItems,
+      unsoldItems: unsoldItems
+    });
+  }
+
+  const currentMonth = getCurrentMonthLabel_();
+  const currentSoldItems = firebaseItemsCache
+    .filter(function(item) { return item.status === 'sold'; })
+    .map(enrichItem_);
+  const currentUnsoldItems = firebaseItemsCache
+    .filter(function(item) { return item.status === 'unsold'; })
+    .map(enrichItem_);
+  const currentEntry = monthMap.get(currentMonth);
+  if (currentEntry) {
+    const mergedSold = currentEntry.soldItems.concat(currentSoldItems);
+    const mergedUnsold = currentEntry.unsoldItems.concat(currentUnsoldItems);
+    monthMap.set(currentMonth, {
+      month: currentMonth,
+      summary: buildSummary_(mergedSold, mergedUnsold),
+      soldItems: mergedSold,
+      unsoldItems: mergedUnsold
+    });
+  } else {
+    monthMap.set(currentMonth, {
+      month: currentMonth,
+      summary: buildSummary_(currentSoldItems, currentUnsoldItems),
+      soldItems: currentSoldItems,
+      unsoldItems: currentUnsoldItems
+    });
+  }
+
+  return {
+    months: Array.from(monthMap.values()).sort(function(a, b) {
+      return String(a.month || '').localeCompare(String(b.month || ''));
+    }),
+    generatedAt: formatDateTime_(Date.now())
+  };
+}
+
+function getCurrentMonthLabel_() {
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit'
+  }).formatToParts(new Date());
+  const year = parts.find(function(part) { return part.type === 'year'; });
+  const month = parts.find(function(part) { return part.type === 'month'; });
+  const y = year ? String(year.value) : '';
+  const m = month ? String(month.value).padStart(2, '0') : '';
+  if (!y || !m) {
+    return getLastMonthLabel_();
+  }
+  return y + '-' + m;
 }
 
 function buildDashboardDataFromItems_(rawItems, updatedAtMs) {

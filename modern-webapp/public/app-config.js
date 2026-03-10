@@ -6,7 +6,7 @@ window.APP_RUNTIME_CONFIG = {
   requireLogin: false,
   heroGifUrl: '',
   firebase: {
-    enabled: false,
+    enabled: true,
     collection: 'mercari_items',
     archiveCollection: 'mercari_archives',
     config: {
