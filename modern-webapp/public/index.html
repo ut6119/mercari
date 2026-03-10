@@ -311,15 +311,6 @@
         gap: 8px;
         margin-bottom: 8px;
       }
-      .transport-clear-button {
-        padding: 3px 7px;
-        border-radius: 999px;
-        border: 1px solid #d8dfeb;
-        background: #f5f7fc;
-        color: #4d5a73;
-        font-size: 10px;
-        font-weight: 700;
-      }
       .transport-button {
         padding: 7px 12px;
         border-radius: 999px;
@@ -385,7 +376,7 @@
       }
       .monthly-summary-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: minmax(0, 1fr);
         gap: 10px;
         margin-bottom: 14px;
       }
@@ -398,6 +389,25 @@
       .monthly-metric-label { color: var(--muted); font-size: 11px; }
       .monthly-metric-value { margin-top: 5px; font-weight: 800; font-size: 20px; letter-spacing: -0.03em; }
       .monthly-metric-note { margin-top: 4px; font-size: 11px; color: var(--muted); }
+      .monthly-metric-split {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+      }
+      .monthly-metric-side {
+        text-align: right;
+        min-width: 118px;
+      }
+      .monthly-metric-delta {
+        margin-top: 5px;
+        font-size: 18px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .monthly-metric-delta.positive { color: #1f7a46; }
+      .monthly-metric-delta.negative { color: #b43e57; }
+      .monthly-metric-delta.neutral { color: #52617d; }
       .monthly-board + .monthly-board { margin-top: 12px; }
       .monthly-board-title { margin: 0 0 8px; font-size: 16px; }
       .monthly-empty { margin: 0; font-size: 12px; color: var(--muted); }
@@ -542,7 +552,7 @@
         .field-row { grid-template-columns: 1fr; }
         .transport-ledger-form .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .monthly-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monthly-summary-grid { grid-template-columns: minmax(0, 1fr); }
         .chart-row { grid-template-columns: 56px 1fr; }
         .chart-values { grid-column: 1 / -1; text-align: left; min-width: 0; }
         th, td { padding: 6px 4px; font-size: 10px; }
@@ -614,7 +624,7 @@
               <div class="board-head">
                 <h3>販売済み</h3>
                 <div class="board-head-right">
-                  <button class="button button-secondary board-head-action" id="archiveButton" type="button">前月をアーカイブ</button>
+                  <button class="button button-secondary board-head-action" id="archiveButton" type="button">月別へアーカイブ</button>
                   <span id="soldCountLabel">0件</span>
                 </div>
               </div>
@@ -695,7 +705,6 @@
               <div class="board-head">
                 <h3>交通費一覧</h3>
                 <div class="board-head-right">
-                  <button class="button button-secondary board-head-action" id="transportClearButton" type="button">削除</button>
                   <span id="transportCountLabel">0件</span>
                 </div>
               </div>
@@ -812,8 +821,8 @@
           <section class="panel">
             <h2>月別棒グラフ</h2>
             <div class="chart-legend">
-              <span><span class="chart-legend-dot" style="background:#2a7fff;"></span>売上</span>
-              <span><span class="chart-legend-dot" style="background:#14b8a6;"></span>利益</span>
+              <span><span class="chart-legend-dot" style="background:#2a7fff;"></span>利益</span>
+              <span><span class="chart-legend-dot" style="background:#14b8a6;"></span>利益率</span>
             </div>
             <div class="chart-group" id="monthlyChart"></div>
           </section>

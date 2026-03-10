@@ -39,6 +39,17 @@ URL は通常 `https://ut6119.github.io/mercari/` です。
 
 新規URLを発行したいときだけ `npm run deploy:new` を使います。
 
+## 文言反映チェック（再発防止）
+
+`前月をアーカイブ` / `前月アーカイブ` の取りこぼし防止用に、次を追加しています。
+
+- `npm run verify:archive-label:local`  
+  ローカルの `Code.gs` / `Index.html` / `modern-webapp/public/*` の文言統一チェック
+- `npm run verify:archive-label:remote`  
+  GAS公開URLとGitHub Pages公開URLの文言チェック
+- `npm run verify:archive-label`  
+  上記のローカル + リモートをまとめて実行
+
 ## GitHub Actions 自動デプロイ
 
 `.github/workflows/deploy-gas.yml` を同梱済みです。`main` への push で自動デプロイします。

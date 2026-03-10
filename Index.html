@@ -460,7 +460,7 @@
           </div>
           <div class="hero-actions">
             <button class="button button-secondary" id="refreshButton" type="button">再読込</button>
-            <button class="button button-secondary" id="archiveButton" type="button">前月をアーカイブ</button>
+            <button class="button button-secondary" id="archiveButton" type="button">月別へアーカイブ</button>
           </div>
         </div>
 
@@ -653,12 +653,12 @@
         });
 
         archiveButton.addEventListener('click', function() {
-          if (!window.confirm('前月をアーカイブして、販売済みだけを別シートへ移します。未販売在庫はこのシートに残します。')) {
+          if (!window.confirm('月別へアーカイブして、販売済みだけを別シートへ移します。未販売在庫はこのシートに残します。')) {
             return;
           }
           runServer('archiveMonthlyData', [], function(data) {
             render(data);
-            showToast('前月アーカイブが完了しました。');
+            showToast('月別アーカイブが完了しました。');
           });
         });
 

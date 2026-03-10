@@ -70,7 +70,6 @@ const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
 const transportSwitch = document.getElementById('transportSwitch');
 const transportInput = document.getElementById('transportInput');
-const transportClearButton = document.getElementById('transportClearButton');
 const transportLedgerBody = document.getElementById('transportLedgerBody');
 const transportCountLabel = document.getElementById('transportCountLabel');
 const transportLedgerToolbar = document.getElementById('transportLedgerToolbar');
@@ -479,15 +478,6 @@ function bindEvents() {
       }
     });
   }
-  if (transportClearButton) {
-    transportClearButton.addEventListener('click', function() {
-      void runApi(async function() {
-        applyTransportPreset_('');
-        applyTransportLedgerPreset_('');
-        await clearSoldTransport_();
-      });
-    });
-  }
   applyTransportPreset_(selectedTransportPreset);
 
   document.querySelectorAll('[data-status-tab]').forEach(function(button) {
@@ -517,14 +507,14 @@ function bindEvents() {
   });
 
   archiveButton.addEventListener('click', async function() {
-    if (!window.confirm('前月をアーカイブして、販売済みだけを別シートへ移します。未販売在庫はこのシートに残します。')) {
+    if (!window.confirm('月別へアーカイブして、販売済みだけを別シートへ移します。未販売在庫はこのシートに残します。')) {
       return;
     }
     await runApi(async function() {
       const data = await request('/api/archive', { method: 'POST' });
       render(data);
       await loadMonthlyData_({ silent: true, forceGas: true });
-      showToast('前月アーカイブが完了しました。');
+      showToast('月別アーカイブが完了しました。');
     });
   });
 
@@ -1450,59 +1440,6 @@ function setDefaultTransportDate_() {
   transportDateInput.value = getTodayDateInput_();
 }
 
-async function clearSoldTransport_() {
-  const soldItems = Array.isArray(currentData && currentData.soldItems)
-    ? currentData.soldItems
-    : [];
-  const targets = soldItems.filter(function(item) {
-    return sanitizeAmount_(item.transport) > 0;
-  });
-  const hadLedger = getTransportLedgerTotal_() > 0;
-
-  if (hadLedger) {
-    pushTransportHistory_();
-    transportHistoryFuture.length = 0;
-    transportLedger = [];
-    saveTransportLedger_();
-    selectedTransportLedgerIds.clear();
-    transportSelectionMode = false;
-    renderTransportLedger_();
-  }
-
-  if (!targets.length && !hadLedger) {
-    recalcSummaryFromDom();
-    showToast('交通費はすでに0円です。');
-    return;
-  }
-
-  if (!targets.length && hadLedger) {
-    if (currentData && currentData.summary) {
-      applySummary(currentData.summary, currentData.lastUpdated);
-    }
-    showToast('交通費をクリアしました。');
-    return;
-  }
-
-  let latestData = null;
-  for (const item of targets) {
-    latestData = await request('/api/items', {
-      method: 'POST',
-      body: JSON.stringify({
-        id: item.id,
-        status: 'sold',
-        name: String(item.name || ''),
-        revenue: sanitizeAmount_(item.revenue),
-        shipping: sanitizeAmount_(item.shipping, DEFAULT_SHIPPING),
-        cost: sanitizeAmount_(item.cost),
-        transport: 0
-      })
-    });
-  }
-
-  render(latestData || await request('/api/dashboard'));
-  showToast('交通費をクリアしました。');
-}
-
 async function request(url, options) {
   const method = String((options && options.method) || 'GET').toUpperCase();
   if (backendMode === 'firebase-required') {
@@ -2233,30 +2170,27 @@ function renderMonthlyViews_() {
   const soldCount = sanitizeAmount_(summary.soldCount);
   const unsoldCount = sanitizeAmount_(summary.unsoldCount);
   const totalCount = soldCount + unsoldCount;
-  monthlySummaryGrid.innerHTML = [
-    {
-      label: '販売済み利益',
-      value: formatSignedYen(summary.soldProfit),
-      note: soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin)
-    },
-    {
-      label: '未販利益',
-      value: formatSignedYen(summary.unsoldProfit),
-      note: unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin)
-    },
-    {
-      label: '合計収支',
-      value: formatSignedYen(summary.overallNet),
-      note: totalCount + '件 / 利益率 ' + formatPercent(summary.overallMargin)
-    },
-    {
-      label: '売上合計',
-      value: formatYen(summary.soldRevenue),
-      note: soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin)
-    }
-  ].map(function(metric) {
-    return '<div class="monthly-metric"><div class="monthly-metric-label">' + metric.label + '</div><div class="monthly-metric-value">' + metric.value + '</div><div class="monthly-metric-note">' + metric.note + '</div></div>';
-  }).join('');
+  const selectedIndex = months.findIndex(function(entry) {
+    return String(entry.month || '') === String(selected.month || '');
+  });
+  const previousSummary = selectedIndex > 0
+    ? (months[selectedIndex - 1] && months[selectedIndex - 1].summary) || null
+    : null;
+  const monthOverMonth = getMonthOverMonth_(summary, previousSummary);
+
+  monthlySummaryGrid.innerHTML = ''
+    + '<div class="monthly-metric monthly-metric-split">'
+    + '  <div class="monthly-metric-main">'
+    + '    <div class="monthly-metric-label">合計収支</div>'
+    + '    <div class="monthly-metric-value">' + formatSignedYen(summary.overallNet) + '</div>'
+    + '    <div class="monthly-metric-note">' + totalCount + '件 / 利益率 ' + formatPercent(summary.overallMargin) + '</div>'
+    + '  </div>'
+    + '  <div class="monthly-metric-side">'
+    + '    <div class="monthly-metric-label">前月比</div>'
+    + '    <div class="monthly-metric-delta ' + monthOverMonth.className + '">' + monthOverMonth.arrow + ' ' + monthOverMonth.rateText + '</div>'
+    + '    <div class="monthly-metric-note">' + monthOverMonth.amountText + '</div>'
+    + '  </div>'
+    + '</div>';
 
   const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
   const unsoldItems = Array.isArray(selected.unsoldItems) ? selected.unsoldItems : [];
@@ -2278,28 +2212,72 @@ function renderMonthlyChart_() {
     return;
   }
 
-  const maxValue = months.reduce(function(max, entry) {
+  const maxProfit = months.reduce(function(max, entry) {
     const summary = entry.summary || {};
-    return Math.max(max, sanitizeAmount_(summary.soldRevenue), Math.abs(Number(summary.soldProfit || 0)));
+    return Math.max(max, Math.abs(Number(summary.soldProfit || 0)));
+  }, 1);
+  const maxMargin = months.reduce(function(max, entry) {
+    const summary = entry.summary || {};
+    return Math.max(max, Math.abs(Number(summary.soldMargin || 0)));
   }, 1);
 
   monthlyChart.innerHTML = months.map(function(entry) {
     const summary = entry.summary || {};
-    const soldRevenue = sanitizeAmount_(summary.soldRevenue);
     const soldProfit = Number(summary.soldProfit || 0);
-    const revenueWidth = Math.max(4, Math.round((soldRevenue / maxValue) * 100));
-    const profitWidth = Math.max(4, Math.round((Math.abs(soldProfit) / maxValue) * 100));
-    const profitClass = soldProfit < 0 ? 'chart-bar profit negative' : 'chart-bar profit';
+    const soldMargin = Number(summary.soldMargin || 0);
+    const profitWidth = calcBarWidth_(Math.abs(soldProfit), maxProfit);
+    const marginWidth = calcBarWidth_(Math.abs(soldMargin), maxMargin);
+    const marginClass = soldMargin < 0 ? 'chart-bar profit negative' : 'chart-bar profit';
     return ''
       + '<div class="chart-row">'
       + '  <div class="chart-label">' + escapeHtml(entry.month || '-') + '</div>'
       + '  <div class="chart-bars">'
-      + '    <div class="chart-bar-track"><div class="chart-bar revenue" style="width:' + revenueWidth + '%;"></div></div>'
-      + '    <div class="chart-bar-track"><div class="' + profitClass + '" style="width:' + profitWidth + '%;"></div></div>'
+      + '    <div class="chart-bar-track"><div class="chart-bar revenue" style="width:' + profitWidth + '%;"></div></div>'
+      + '    <div class="chart-bar-track"><div class="' + marginClass + '" style="width:' + marginWidth + '%;"></div></div>'
       + '  </div>'
       + '  <div class="chart-values">利益 ' + formatSignedYen(soldProfit) + ' / 利益率 ' + formatPercent(summary.soldMargin) + '</div>'
       + '</div>';
   }).join('');
+}
+
+function calcBarWidth_(value, maxValue) {
+  const amount = Number(value || 0);
+  const max = Number(maxValue || 0);
+  if (!Number.isFinite(amount) || !Number.isFinite(max) || amount <= 0 || max <= 0) {
+    return 0;
+  }
+  const percent = Math.round((amount / max) * 100);
+  return Math.min(100, Math.max(4, percent));
+}
+
+function getMonthOverMonth_(currentSummary, previousSummary) {
+  if (!previousSummary) {
+    return {
+      className: 'neutral',
+      arrow: '→',
+      rateText: '--',
+      amountText: '比較月なし'
+    };
+  }
+
+  const currentNet = Number((currentSummary && currentSummary.overallNet) || 0);
+  const previousNet = Number((previousSummary && previousSummary.overallNet) || 0);
+  const delta = currentNet - previousNet;
+  const className = delta > 0 ? 'positive' : (delta < 0 ? 'negative' : 'neutral');
+  const arrow = delta > 0 ? '▲' : (delta < 0 ? '▼' : '→');
+  let ratio = null;
+  if (previousNet !== 0) {
+    ratio = delta / Math.abs(previousNet);
+  } else if (delta === 0) {
+    ratio = 0;
+  }
+
+  return {
+    className: className,
+    arrow: arrow,
+    rateText: formatSignedPercent_(ratio),
+    amountText: formatSignedYen(delta)
+  };
 }
 
 function renderMonthlyRow_(item) {
@@ -2777,6 +2755,17 @@ function formatSignedYen(value) {
 function formatPercent(value) {
   if (value === null || typeof value === 'undefined') return '--';
   return (Number(value) * 100).toFixed(1) + '%';
+}
+
+function formatSignedPercent_(value) {
+  if (value === null || typeof value === 'undefined') return '--';
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '--';
+  if (Math.abs(number) < 0.0000001) {
+    return '0.0%';
+  }
+  const abs = (Math.abs(number) * 100).toFixed(1) + '%';
+  return (number > 0 ? '+' : '-') + abs;
 }
 
 function escapeHtml(value) {

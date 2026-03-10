@@ -5,6 +5,9 @@
     "push": "./node_modules/.bin/clasp push --force",
     "deploy": "./scripts/deploy-webapp.sh",
     "deploy:new": "./scripts/deploy-webapp.sh --new",
+    "verify:archive-label": "./scripts/verify-archive-label.sh all",
+    "verify:archive-label:local": "./scripts/verify-archive-label.sh local",
+    "verify:archive-label:remote": "./scripts/verify-archive-label.sh remote",
     "copy:secret:clasprc": "./scripts/copy-github-secret.sh clasprc",
     "copy:secret:clasprc:b64": "./scripts/copy-github-secret.sh clasprc-b64",
     "copy:secret:deployid": "./scripts/copy-github-secret.sh deployment-id"

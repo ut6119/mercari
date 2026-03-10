@@ -62,7 +62,7 @@ function onOpen() {
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('メルカリアプリ')
     .addItem('表示を整える', 'normalizeCurrentSheet')
-    .addItem('前月をアーカイブ', 'archiveMonthlyData')
+    .addItem('月別へアーカイブ', 'archiveMonthlyData')
     .addToUi();
 }
 
