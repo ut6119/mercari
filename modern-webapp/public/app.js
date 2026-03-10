@@ -1425,19 +1425,18 @@ function playCategoryBurst_(status, intensity, anchorEl) {
   if (!gifUrl) return;
 
   const targetPanel = status === 'sold' ? soldPanel : unsoldPanel;
+  const anchorRect = anchorEl ? anchorEl.getBoundingClientRect() : null;
   const rect = targetPanel ? targetPanel.getBoundingClientRect() : null;
+  const anchorVisible = isRectVisibleInViewport_(anchorRect);
   const panelVisible = isRectVisibleInViewport_(rect);
   let centerX = window.innerWidth * 0.5;
   let centerY = Math.min(window.innerHeight * 0.34, 220);
-  if (panelVisible) {
+  if (anchorVisible) {
+    centerX = anchorRect.left + anchorRect.width * 0.5;
+    centerY = anchorRect.top + anchorRect.height * 0.5;
+  } else if (panelVisible) {
     centerX = rect.left + rect.width * 0.5;
     centerY = rect.top + Math.min(82, Math.max(42, rect.height * 0.2));
-  } else if (anchorEl) {
-    const anchorRect = anchorEl.getBoundingClientRect();
-    if (isRectVisibleInViewport_(anchorRect)) {
-      centerX = anchorRect.left + anchorRect.width * 0.5;
-      centerY = anchorRect.top + anchorRect.height * 0.5;
-    }
   }
   const count = Math.max(6, Math.min(18, Number(intensity) || 10));
 
@@ -1445,7 +1444,7 @@ function playCategoryBurst_(status, intensity, anchorEl) {
     const angle = ((Math.PI * 2) / count) * i + ((Math.random() - 0.5) * 0.5);
     const distance = 72 + Math.random() * 120;
     const dx = Math.cos(angle) * distance;
-    const dy = Math.sin(angle) * distance - (44 + Math.random() * 54);
+    const dy = Math.sin(angle) * distance + ((Math.random() - 0.5) * 26);
     const size = Math.round(18 + Math.random() * 52);
     const fromScale = (0.45 + Math.random() * 0.7).toFixed(2);
     const toScale = (0.12 + Math.random() * 0.34).toFixed(2);
@@ -1468,8 +1467,8 @@ function playCategoryBurst_(status, intensity, anchorEl) {
     sprite.style.setProperty('--to-scale', toScale);
     sprite.style.setProperty('--from-rotate', fromRotate + 'deg');
     sprite.style.setProperty('--to-rotate', toRotate + 'deg');
-    sprite.style.animationDuration = Math.round(980 + Math.random() * 470) + 'ms';
-    sprite.style.animationDelay = Math.round(Math.random() * 140) + 'ms';
+    sprite.style.animationDuration = Math.round(1500 + Math.random() * 820) + 'ms';
+    sprite.style.animationDelay = Math.round(Math.random() * 200) + 'ms';
     sprite.addEventListener('animationend', function() {
       sprite.remove();
     }, { once: true });
@@ -1526,7 +1525,7 @@ function scrollToItemRowAndAnimate_(itemId, status, intensity, fallbackAnchorEl)
 
   setTimeout(function() {
     playCategoryBurst_(status, intensity, row);
-  }, 420);
+  }, 650);
 }
 
 function findItemRowById_(itemId, status) {
