@@ -27,8 +27,10 @@ const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
 const ENABLE_GIF_EFFECTS = false;
 const ENABLE_ADD_BUTTON_PEEK = true;
-const ADD_BUTTON_PEEK_MIN_MS = 4500;
-const ADD_BUTTON_PEEK_MAX_MS = 12000;
+const ADD_BUTTON_PEEK_MIN_MS = 1500;
+const ADD_BUTTON_PEEK_MAX_MS = 6000;
+const ADD_BUTTON_PEEK_ANIM_MIN_MS = 1300;
+const ADD_BUTTON_PEEK_ANIM_MAX_MS = 2000;
 
 let backendMode = 'gas';
 let firebaseDb = null;
@@ -2796,7 +2798,10 @@ function playAddButtonPeek_() {
   sprite.style.left = x.toFixed(1) + 'px';
   sprite.style.top = y.toFixed(1) + 'px';
   sprite.style.setProperty('--size', size + 'px');
-  sprite.style.animationDuration = (1300 + Math.round(Math.random() * 700)) + 'ms';
+  const animMin = Math.max(200, ADD_BUTTON_PEEK_ANIM_MIN_MS);
+  const animMax = Math.max(animMin, ADD_BUTTON_PEEK_ANIM_MAX_MS);
+  const animDuration = animMin + Math.floor(Math.random() * (animMax - animMin + 1));
+  sprite.style.animationDuration = animDuration + 'ms';
   sprite.addEventListener('animationend', function() {
     sprite.remove();
   }, { once: true });
