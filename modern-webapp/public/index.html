@@ -136,13 +136,6 @@
       }
       .sold-balance .sold-main .stat-balance-value { font-size: 12px; }
       .sold-balance .sold-transport .stat-balance-value { font-size: 12px; }
-      .sold-card-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 6px;
-      }
-
       .view-tabs {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -578,10 +571,7 @@
 
         <div class="stats">
           <div class="stat">
-            <div class="sold-card-head">
-              <div class="stat-label">販売済み利益</div>
-              <button class="transport-clear-button" id="transportClearButton" type="button">削除</button>
-            </div>
+            <div class="stat-label">販売済み利益</div>
             <div class="stat-balance sold-balance">
               <div class="stat-balance-item sold-main">
                 <div class="stat-balance-label">販売済み利益</div>
@@ -706,6 +696,9 @@
             <section class="panel transport-ledger-panel" id="transportLedgerPanel">
               <div class="board-head">
                 <h3>交通費一覧</h3>
+                <div class="board-head-right">
+                  <button class="button button-secondary board-head-action" id="transportClearButton" type="button">削除</button>
+                </div>
               </div>
               <div class="table-wrap">
                 <table class="compact-table">
