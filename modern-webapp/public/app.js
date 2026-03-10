@@ -977,15 +977,21 @@ async function request(url, options) {
 async function loadMonthlyData_(options) {
   const opts = options || {};
   try {
-    const data = backendMode === 'firebase'
-      ? await firebaseLoadMonthly_()
-      : await (async function() {
-        const params = new URLSearchParams();
-        params.set('api', 'monthly');
-        params.set('_ts', String(Date.now()));
-        return requestFromGasParams_(params, { requireSummary: false });
-      })();
-    const months = Array.isArray(data && data.months) ? data.months : [];
+    let data;
+    if (backendMode === 'firebase') {
+      data = await firebaseLoadMonthly_();
+      const firebaseMonths = Array.isArray(data && data.months) ? data.months : [];
+      if (!firebaseMonths.length) {
+        data = await loadMonthlyDataFromGas_();
+      }
+    } else {
+      data = await loadMonthlyDataFromGas_();
+    }
+    const currentMonth = getCurrentMonthLabel_();
+    const months = (Array.isArray(data && data.months) ? data.months : [])
+      .filter(function(entry) {
+        return entry && String(entry.month || '').trim() !== currentMonth;
+      });
     monthlyState.months = months;
     if (!months.length) {
       monthlyState.selectedMonth = '';
@@ -1001,6 +1007,13 @@ async function loadMonthlyData_(options) {
       showToast(error.message || '月別データの取得に失敗しました。');
     }
   }
+}
+
+async function loadMonthlyDataFromGas_() {
+  const params = new URLSearchParams();
+  params.set('api', 'monthly');
+  params.set('_ts', String(Date.now()));
+  return requestFromGasParams_(params, { requireSummary: false });
 }
 
 async function requestFromGasParams_(params, options) {
@@ -1267,8 +1280,6 @@ async function firebaseArchive_() {
 }
 
 async function firebaseLoadMonthly_() {
-  await firebaseLoadDashboard_();
-
   const monthMap = new Map();
   const archiveSnapshot = await firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).get();
   for (const doc of archiveSnapshot.docs) {
@@ -1299,32 +1310,6 @@ async function firebaseLoadMonthly_() {
       summary: buildSummary_(soldItems, unsoldItems),
       soldItems: soldItems,
       unsoldItems: unsoldItems
-    });
-  }
-
-  const currentMonth = getCurrentMonthLabel_();
-  const currentSoldItems = firebaseItemsCache
-    .filter(function(item) { return item.status === 'sold'; })
-    .map(enrichItem_);
-  const currentUnsoldItems = firebaseItemsCache
-    .filter(function(item) { return item.status === 'unsold'; })
-    .map(enrichItem_);
-  const currentEntry = monthMap.get(currentMonth);
-  if (currentEntry) {
-    const mergedSold = currentEntry.soldItems.concat(currentSoldItems);
-    const mergedUnsold = currentEntry.unsoldItems.concat(currentUnsoldItems);
-    monthMap.set(currentMonth, {
-      month: currentMonth,
-      summary: buildSummary_(mergedSold, mergedUnsold),
-      soldItems: mergedSold,
-      unsoldItems: mergedUnsold
-    });
-  } else {
-    monthMap.set(currentMonth, {
-      month: currentMonth,
-      summary: buildSummary_(currentSoldItems, currentUnsoldItems),
-      soldItems: currentSoldItems,
-      unsoldItems: currentUnsoldItems
     });
   }
 
@@ -1898,11 +1883,10 @@ function playCategoryBurst_(status, intensity, anchorEl) {
   const count = Math.max(2, Math.min(6, Math.round(rawIntensity * 0.5)));
 
   for (let i = 0; i < count; i += 1) {
-    const angle = ((Math.PI * 2) / count) * i + ((Math.random() - 0.5) * 0.5);
-    const horizontalDistance = 120 + Math.random() * 170;
-    const verticalDistance = 52 + Math.random() * 70;
-    const dx = Math.cos(angle) * horizontalDistance;
-    const dy = Math.sin(angle) * verticalDistance + ((Math.random() - 0.5) * 18);
+    const angle = ((Math.PI * 2) / count) * i;
+    const distance = 180 + Math.random() * 220;
+    const dx = Math.cos(angle) * distance;
+    const dy = Math.sin(angle) * distance;
     const size = Math.round(18 + Math.random() * 52);
     const fromScale = (0.45 + Math.random() * 0.7).toFixed(2);
     const toScale = (0.12 + Math.random() * 0.34).toFixed(2);
@@ -1926,7 +1910,7 @@ function playCategoryBurst_(status, intensity, anchorEl) {
     sprite.style.setProperty('--from-rotate', fromRotate + 'deg');
     sprite.style.setProperty('--to-rotate', toRotate + 'deg');
     sprite.style.animationDuration = '3000ms';
-    sprite.style.animationDelay = Math.round(Math.random() * 120) + 'ms';
+    sprite.style.animationDelay = Math.round(Math.random() * 60) + 'ms';
     sprite.addEventListener('animationend', function() {
       sprite.remove();
     }, { once: true });
