@@ -33,11 +33,14 @@
         box-shadow: 0 16px 36px rgba(15, 33, 68, 0.1);
       }
       .hero {
+        position: relative;
         padding: 24px;
         background: linear-gradient(140deg, rgba(42, 127, 255, 0.11), rgba(20, 184, 166, 0.08) 58%, rgba(255, 255, 255, 0.95));
       }
       .hero-mascot {
-        display: block;
+        position: absolute;
+        top: 8px;
+        right: 8px;
         width: clamp(46px, 7vw, 74px);
         height: auto;
         pointer-events: none;
@@ -46,14 +49,7 @@
       }
       .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
       .title { margin: 0; font-size: clamp(28px, 4vw, 40px); line-height: 1; letter-spacing: -0.04em; }
-      .hero-note-wrap {
-        margin-top: 8px;
-        display: inline-flex;
-        flex-direction: column;
-        align-items: flex-end;
-        width: 100%;
-      }
-      .hero-note { margin-top: 8px; color: var(--muted); font-size: 13px; }
+      .hero-note { margin-top: 8px; color: var(--muted); font-size: 13px; padding-right: 84px; }
       .button, button {
         appearance: none; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700;
         cursor: pointer; transition: transform 120ms ease, opacity 120ms ease;
@@ -356,8 +352,9 @@
       @media (max-width: 720px) {
         .shell { width: min(100vw - 12px, 100%); margin: 12px auto 28px; }
         .hero, .panel { padding: 16px; }
-        .hero-mascot { width: 48px; }
+        .hero-mascot { width: 48px; top: 6px; right: 6px; }
         .hero-top { flex-direction: column; }
+        .hero-note { padding-right: 56px; }
         .view-tab { font-size: 12px; padding: 9px 6px; }
         .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -375,13 +372,11 @@
   <body>
     <div class="shell">
       <section class="hero">
+        <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
         <div class="hero-top">
           <h1 class="title">メルカリ収支アプリ</h1>
         </div>
-        <div class="hero-note-wrap">
-          <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
-          <div class="hero-note">ホーム・月別・棒グラフで収支を切り替えて確認できます。</div>
-        </div>
+        <div class="hero-note">ホーム・月別・棒グラフで収支を切り替えて確認できます。</div>
 
         <div class="stats">
           <div class="stat">
