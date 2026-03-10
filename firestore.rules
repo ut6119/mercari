@@ -1,11 +1,55 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /mercari_items/{doc} {
-      allow read, write: if true;
+    function signedIn() {
+      return request.auth != null;
     }
-    match /mercari_archives/{doc=**} {
-      allow read, write: if true;
+
+    function legacyOwnerUid() {
+      return exists(/databases/$(database)/documents/mercari_archives/__legacy_owner__)
+        ? get(/databases/$(database)/documents/mercari_archives/__legacy_owner__).data.ownerUid
+        : '';
+    }
+
+    function isLegacyOwner() {
+      return signedIn() && request.auth.uid == legacyOwnerUid();
+    }
+
+    // User scoped items.
+    match /mercari_items/{uid}/items/{itemId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Legacy flat items (one-time migration only).
+    match /mercari_items/{legacyDocId} {
+      allow read, write: if isLegacyOwner();
+    }
+
+    // User scoped archives/transport/meta.
+    match /mercari_archives/{uid}/{path=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // Legacy archive docs (one-time migration only).
+    match /mercari_archives/{month}/items/{itemId} {
+      allow read, write: if isLegacyOwner() && month.matches('^\\d{4}-\\d{2}$');
+    }
+    match /mercari_archives/transport_ledger/items/{itemId} {
+      allow read, write: if isLegacyOwner();
+    }
+    match /mercari_archives/transport_ledger {
+      allow read, write: if isLegacyOwner();
+    }
+    match /mercari_archives/__meta__ {
+      allow read, write: if isLegacyOwner();
+    }
+
+    // Ownership lock for one-time legacy migration.
+    match /mercari_archives/__legacy_owner__ {
+      allow read: if signedIn();
+      allow create: if signedIn() && !exists(/databases/$(database)/documents/mercari_archives/__legacy_owner__);
+      allow update: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow delete: if false;
     }
   }
 }

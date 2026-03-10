@@ -17,6 +17,11 @@ const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
 const FIREBASE_ARCHIVE_COLLECTION = FIREBASE_OPTIONS.archiveCollection || 'mercari_archives';
 const FIREBASE_TRANSPORT_LEDGER_DOC = FIREBASE_OPTIONS.transportLedgerDoc || 'transport_ledger';
 const FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION = FIREBASE_OPTIONS.transportLedgerSubcollection || 'items';
+const FIREBASE_USER_MONTHS_SUBCOLLECTION = 'months';
+const FIREBASE_USER_META_SUBCOLLECTION = 'meta';
+const FIREBASE_USER_META_DOC = 'state';
+const FIREBASE_USER_TRANSPORT_SUBCOLLECTION = FIREBASE_TRANSPORT_LEDGER_DOC + '_' + FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION;
+const FIREBASE_LEGACY_OWNER_DOC = '__legacy_owner__';
 const FIREBASE_SDK_VERSION = '10.12.5';
 const FIREBASE_APP_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-app-compat.js';
 const FIREBASE_FIRESTORE_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-firestore-compat.js';
@@ -34,16 +39,26 @@ const ADD_BUTTON_PEEK_MIN_MS = 1500;
 const ADD_BUTTON_PEEK_MAX_MS = 6000;
 const ADD_BUTTON_PEEK_ANIM_MIN_MS = 1300;
 const ADD_BUTTON_PEEK_ANIM_MAX_MS = 2000;
+const ARCHIVE_BUTTON_LABEL_ARCHIVE = '月別へアーカイブ';
+const ARCHIVE_BUTTON_LABEL_CANCEL = 'アーカイブ取消';
+const ARCHIVE_BUTTON_ACTION_ARCHIVE = 'archive';
+const ARCHIVE_BUTTON_ACTION_CANCEL = 'cancel';
+const FIREBASE_ARCHIVE_META_DOC = '__meta__';
 
 let backendMode = 'gas';
 let firebaseDb = null;
 let firebaseItemsCollection = null;
 let firebaseTransportLedgerCollection = null;
+let firebaseArchiveMonthsCollection = null;
+let firebaseArchiveMetaRef = null;
+let firebaseActiveUserId = '';
 let firebaseItemsCache = [];
 let authFirebaseApp = null;
 let firebaseAuth = null;
 let signedInUser = null;
 let signedInIdToken = '';
+let authScopeSyncSeq = 0;
+const legacyMigrationCheckedUserIds = new Set();
 const monthlyState = {
   months: [],
   selectedMonth: '',
@@ -147,6 +162,7 @@ const TRANSPORT_HISTORY_LIMIT = 40;
 let transportLedgerSyncUnsubscribe = null;
 let addButtonPeekTimer = null;
 let addButtonPeekInitialized = false;
+let archiveCancelEnabled = false;
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -154,28 +170,33 @@ init().catch(function(error) {
 
 async function init() {
   setupHeroMascot_();
-  const cachedDashboard = loadCachedDashboard_();
+  const cachedDashboard = (FIREBASE_OPTIONS.enabled && REQUIRE_LOGIN) ? null : loadCachedDashboard_();
   if (cachedDashboard) {
     render(cachedDashboard, { skipHistory: true });
   }
   await ensureFirebaseSdk_();
   await initializeAuth_();
   await initializeBackend();
-  await initializeTransportLedger_();
   bindEvents();
+  setArchiveCancelState_(false);
   startAddButtonPeek_();
-  renderTransportLedger_();
   setDefaultTransportDate_();
   applyTransportLedgerPreset_('');
   closeQuickAddModal_({ keepHomeView: true });
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
-  if (cachedDashboard) {
-    void refreshDashboardInBackground_();
+  if (backendMode === 'firebase') {
+    await syncDataScopeForAuth_({ suppressToast: true });
   } else {
-    await reloadData('最新状態を読み込みました。');
+    await initializeTransportLedger_();
+    renderTransportLedger_();
+    if (cachedDashboard) {
+      void refreshDashboardInBackground_();
+    } else {
+      await reloadData('最新状態を読み込みました。');
+    }
+    void loadMonthlyData_({ silent: true });
   }
-  void loadMonthlyData_({ silent: true, forceGas: true });
 }
 
 function setupHeroMascot_() {
@@ -256,6 +277,289 @@ function activateView_(viewName) {
   if (chartView) chartView.classList.toggle('active', target === 'chart');
 }
 
+function getFirebaseScopedUserId_() {
+  const uid = signedInUser && signedInUser.uid ? String(signedInUser.uid).trim() : '';
+  if (REQUIRE_LOGIN) {
+    return uid;
+  }
+  return uid || 'public';
+}
+
+function hasFirebaseDataAccess_() {
+  if (backendMode !== 'firebase') return true;
+  return Boolean(firebaseItemsCollection && firebaseTransportLedgerCollection && firebaseArchiveMonthsCollection && firebaseArchiveMetaRef);
+}
+
+function getStorageScopeKey_() {
+  if (FIREBASE_OPTIONS.enabled && REQUIRE_LOGIN) {
+    const uid = signedInUser && signedInUser.uid ? String(signedInUser.uid).trim() : '';
+    return 'firebase_' + (uid || 'signed_out');
+  }
+  return 'shared';
+}
+
+function getScopedStorageKey_(baseKey) {
+  return baseKey + '_' + getStorageScopeKey_();
+}
+
+function resetMonthlyState_() {
+  monthlyState.months = [];
+  monthlyState.selectedMonth = '';
+  monthlyState.loading = false;
+  renderMonthlyViews_();
+  applyYearlyOverallValue_();
+}
+
+function renderSignedOutState_() {
+  historyPast.length = 0;
+  historyFuture.length = 0;
+  setArchiveCancelState_(false);
+  currentData = buildDashboardDataFromItems_([], Date.now());
+  render(currentData, { skipHistory: true });
+  transportLedger = [];
+  selectedTransportLedgerIds.clear();
+  transportSelectionMode = false;
+  renderTransportLedger_();
+  resetMonthlyState_();
+}
+
+function refreshFirebaseCollectionsForCurrentUser_() {
+  if (!firebaseDb) {
+    firebaseItemsCollection = null;
+    firebaseTransportLedgerCollection = null;
+    firebaseArchiveMonthsCollection = null;
+    firebaseArchiveMetaRef = null;
+    firebaseActiveUserId = '';
+    return;
+  }
+  const userId = getFirebaseScopedUserId_();
+  if (!userId) {
+    firebaseItemsCollection = null;
+    firebaseTransportLedgerCollection = null;
+    firebaseArchiveMonthsCollection = null;
+    firebaseArchiveMetaRef = null;
+    firebaseActiveUserId = '';
+    return;
+  }
+  if (firebaseActiveUserId === userId && firebaseItemsCollection && firebaseArchiveMonthsCollection && firebaseTransportLedgerCollection && firebaseArchiveMetaRef) {
+    return;
+  }
+  firebaseActiveUserId = userId;
+  firebaseItemsCollection = firebaseDb
+    .collection(FIREBASE_COLLECTION)
+    .doc(userId)
+    .collection('items');
+  const userArchiveRoot = firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).doc(userId);
+  firebaseArchiveMonthsCollection = userArchiveRoot.collection(FIREBASE_USER_MONTHS_SUBCOLLECTION);
+  firebaseArchiveMetaRef = userArchiveRoot
+    .collection(FIREBASE_USER_META_SUBCOLLECTION)
+    .doc(FIREBASE_USER_META_DOC);
+  firebaseTransportLedgerCollection = userArchiveRoot.collection(FIREBASE_USER_TRANSPORT_SUBCOLLECTION);
+}
+
+async function runFirestoreMutations_(mutations) {
+  const actions = Array.isArray(mutations) ? mutations : [];
+  if (!actions.length || !firebaseDb) return;
+  const MAX_BATCH = 400;
+  let batch = firebaseDb.batch();
+  let count = 0;
+
+  for (const apply of actions) {
+    if (typeof apply !== 'function') continue;
+    apply(batch);
+    count += 1;
+    if (count >= MAX_BATCH) {
+      await batch.commit();
+      batch = firebaseDb.batch();
+      count = 0;
+    }
+  }
+  if (count > 0) {
+    await batch.commit();
+  }
+}
+
+function isLegacyItemDocData_(data) {
+  if (!data || typeof data !== 'object') return false;
+  return Object.prototype.hasOwnProperty.call(data, 'status')
+    || Object.prototype.hasOwnProperty.call(data, 'name')
+    || Object.prototype.hasOwnProperty.call(data, 'revenue')
+    || Object.prototype.hasOwnProperty.call(data, 'cost');
+}
+
+async function migrateLegacySharedDataIfNeeded_() {
+  if (!firebaseDb || !firebaseItemsCollection || !firebaseArchiveMonthsCollection || !firebaseTransportLedgerCollection || !firebaseArchiveMetaRef) {
+    return;
+  }
+  const userId = firebaseActiveUserId;
+  if (!userId || userId === 'public') return;
+  if (legacyMigrationCheckedUserIds.has(userId)) return;
+
+  const alreadyHasUserData = await firebaseItemsCollection.limit(1).get();
+  if (!alreadyHasUserData.empty) {
+    legacyMigrationCheckedUserIds.add(userId);
+    return;
+  }
+
+  const legacyOwnerRef = firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).doc(FIREBASE_LEGACY_OWNER_DOC);
+  const ownerId = await firebaseDb.runTransaction(async function(tx) {
+    const snap = await tx.get(legacyOwnerRef);
+    const currentOwner = snap.exists ? String((snap.data() || {}).ownerUid || '').trim() : '';
+    if (currentOwner && currentOwner !== userId) {
+      return currentOwner;
+    }
+    if (!currentOwner) {
+      tx.set(legacyOwnerRef, {
+        ownerUid: userId,
+        updatedAtMs: Date.now()
+      }, { merge: true });
+    }
+    return userId;
+  });
+
+  if (String(ownerId || '') !== userId) {
+    legacyMigrationCheckedUserIds.add(userId);
+    return;
+  }
+
+  let migrated = false;
+  const legacyItemsSnapshot = await firebaseDb.collection(FIREBASE_COLLECTION).get();
+  const legacyItemDocs = legacyItemsSnapshot.docs.filter(function(doc) {
+    return isLegacyItemDocData_(doc.data());
+  });
+  if (legacyItemDocs.length > 0) {
+    const itemMutations = [];
+    legacyItemDocs.forEach(function(doc) {
+      const data = doc.data() || {};
+      itemMutations.push(function(batch) {
+        batch.set(firebaseItemsCollection.doc(doc.id), data, { merge: true });
+      });
+      itemMutations.push(function(batch) {
+        batch.delete(doc.ref);
+      });
+    });
+    await runFirestoreMutations_(itemMutations);
+    migrated = true;
+  }
+
+  const legacyTransportCollection = firebaseDb
+    .collection(FIREBASE_ARCHIVE_COLLECTION)
+    .doc(FIREBASE_TRANSPORT_LEDGER_DOC)
+    .collection(FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION);
+  const legacyTransportSnapshot = await legacyTransportCollection.get();
+  if (!legacyTransportSnapshot.empty) {
+    const transportMutations = [];
+    legacyTransportSnapshot.docs.forEach(function(doc) {
+      const data = doc.data() || {};
+      transportMutations.push(function(batch) {
+        batch.set(firebaseTransportLedgerCollection.doc(doc.id), data, { merge: true });
+      });
+      transportMutations.push(function(batch) {
+        batch.delete(doc.ref);
+      });
+    });
+    transportMutations.push(function(batch) {
+      batch.delete(firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).doc(FIREBASE_TRANSPORT_LEDGER_DOC));
+    });
+    await runFirestoreMutations_(transportMutations);
+    migrated = true;
+  }
+
+  const legacyArchiveSnapshot = await firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).get();
+  const legacyMonthDocs = legacyArchiveSnapshot.docs.filter(function(doc) {
+    return /^\d{4}-\d{2}$/.test(String(doc.id || '').trim());
+  });
+  for (const legacyMonthDoc of legacyMonthDocs) {
+    const month = String(legacyMonthDoc.id || '').trim();
+    const itemsSnapshot = await legacyMonthDoc.ref.collection('items').get();
+    if (itemsSnapshot.empty) {
+      continue;
+    }
+    const monthMutations = [];
+    itemsSnapshot.docs.forEach(function(itemDoc) {
+      const data = itemDoc.data() || {};
+      monthMutations.push(function(batch) {
+        batch.set(
+          firebaseArchiveMonthsCollection.doc(month).collection('items').doc(itemDoc.id),
+          data,
+          { merge: true }
+        );
+      });
+      monthMutations.push(function(batch) {
+        batch.delete(itemDoc.ref);
+      });
+    });
+    monthMutations.push(function(batch) {
+      batch.delete(legacyMonthDoc.ref);
+    });
+    await runFirestoreMutations_(monthMutations);
+    migrated = true;
+  }
+
+  const legacyArchiveMetaRef = firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).doc(FIREBASE_ARCHIVE_META_DOC);
+  const legacyArchiveMetaSnapshot = await legacyArchiveMetaRef.get();
+  if (legacyArchiveMetaSnapshot.exists) {
+    const metaData = legacyArchiveMetaSnapshot.data() || {};
+    await runFirestoreMutations_([
+      function(batch) {
+        batch.set(firebaseArchiveMetaRef, metaData, { merge: true });
+      },
+      function(batch) {
+        batch.delete(legacyArchiveMetaRef);
+      }
+    ]);
+    migrated = true;
+  }
+
+  legacyMigrationCheckedUserIds.add(userId);
+  if (migrated) {
+    showToast('既存データをこのアカウントへ移行しました。');
+  }
+}
+
+function stopTransportLedgerSync_() {
+  if (!transportLedgerSyncUnsubscribe) return;
+  transportLedgerSyncUnsubscribe();
+  transportLedgerSyncUnsubscribe = null;
+}
+
+async function syncDataScopeForAuth_(options) {
+  const opts = options || {};
+  const seq = ++authScopeSyncSeq;
+  if (backendMode !== 'firebase') return;
+
+  stopTransportLedgerSync_();
+  refreshFirebaseCollectionsForCurrentUser_();
+  setArchiveCancelState_(false);
+  transportLedger = loadTransportLedger_();
+  selectedTransportLedgerIds.clear();
+  transportSelectionMode = false;
+  renderTransportLedger_();
+
+  if (!hasFirebaseDataAccess_()) {
+    renderSignedOutState_();
+    return;
+  }
+
+  try {
+    await migrateLegacySharedDataIfNeeded_();
+    if (seq !== authScopeSyncSeq) return;
+    await initializeTransportLedger_();
+    if (seq !== authScopeSyncSeq) return;
+    const data = await request('/api/dashboard');
+    if (seq !== authScopeSyncSeq) return;
+    historyPast.length = 0;
+    historyFuture.length = 0;
+    render(data, { skipHistory: true });
+    await loadMonthlyData_({ silent: true });
+  } catch (error) {
+    if (seq !== authScopeSyncSeq) return;
+    if (!opts.suppressToast) {
+      showToast(error.message || 'データの読み込みに失敗しました。');
+    }
+  }
+}
+
 async function initializeBackend() {
   if (USE_LOCAL_API) {
     backendMode = 'local';
@@ -287,12 +591,8 @@ async function initializeBackend() {
   }
   firebaseDb = window.firebase.firestore(app);
   void enableFirestorePersistence_(firebaseDb);
-  firebaseItemsCollection = firebaseDb.collection(FIREBASE_COLLECTION);
-  firebaseTransportLedgerCollection = firebaseDb
-    .collection(FIREBASE_ARCHIVE_COLLECTION)
-    .doc(FIREBASE_TRANSPORT_LEDGER_DOC)
-    .collection(FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION);
   backendMode = 'firebase';
+  refreshFirebaseCollectionsForCurrentUser_();
 }
 
 async function enableFirestorePersistence_(db) {
@@ -342,15 +642,18 @@ async function initializeAuth_() {
     if (!user) {
       signedInIdToken = '';
       updateAuthUi_('認証: 未ログイン');
+      void syncDataScopeForAuth_({ suppressToast: true });
       return;
     }
     void user.getIdToken().then(function(token) {
       signedInIdToken = String(token || '');
       const email = String(user.email || '').trim();
       updateAuthUi_(email ? ('認証: ' + email) : '認証: ログイン済み');
+      void syncDataScopeForAuth_({ suppressToast: true });
     }).catch(function() {
       signedInIdToken = '';
       updateAuthUi_('認証: トークン失敗');
+      void syncDataScopeForAuth_({ suppressToast: true });
     });
   });
 
@@ -446,7 +749,7 @@ function bindEvents() {
       if (!target) return;
       activateView_(target);
       if ((target === 'monthly' || target === 'chart') && monthlyState.months.length === 0) {
-        void loadMonthlyData_({ forceGas: true });
+        void loadMonthlyData_({ silent: true });
       }
     });
   });
@@ -526,13 +829,28 @@ function bindEvents() {
   });
 
   archiveButton.addEventListener('click', async function() {
+    if (getArchiveButtonAction_() === ARCHIVE_BUTTON_ACTION_CANCEL && archiveCancelEnabled) {
+      if (!window.confirm('直前の月別アーカイブを取り消して、販売済みデータをホームへ戻します。')) {
+        return;
+      }
+      await runApi(async function() {
+        const data = await request('/api/archive/cancel', { method: 'POST' });
+        render(data);
+        await loadMonthlyData_({ silent: true });
+        setArchiveCancelState_(false);
+        showToast('月別アーカイブを取り消しました。');
+      });
+      return;
+    }
+
     if (!window.confirm('月別へアーカイブして、販売済みだけを今日時点の前月データとして別シートへ移します。未販売在庫はこのシートに残します。')) {
       return;
     }
     await runApi(async function() {
       const data = await request('/api/archive', { method: 'POST' });
       render(data);
-      await loadMonthlyData_({ silent: true, forceGas: true });
+      await loadMonthlyData_({ silent: true });
+      setArchiveCancelState_(true);
       showToast('月別アーカイブが完了しました。');
     });
   });
@@ -556,6 +874,7 @@ function bindEvents() {
       if (addedItemId) {
         markItemsToBottom_(payload.status, [addedItemId]);
       }
+      setArchiveCancelState_(false);
       quickAddForm.reset();
       shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
@@ -1345,9 +1664,28 @@ function closeQuickAddModal_(options) {
   }
 }
 
+function getArchiveButtonAction_() {
+  if (!archiveButton) return ARCHIVE_BUTTON_ACTION_ARCHIVE;
+  const action = String(archiveButton.dataset.archiveAction || '').trim().toLowerCase();
+  return action === ARCHIVE_BUTTON_ACTION_CANCEL
+    ? ARCHIVE_BUTTON_ACTION_CANCEL
+    : ARCHIVE_BUTTON_ACTION_ARCHIVE;
+}
+
+function setArchiveCancelState_(enabled) {
+  archiveCancelEnabled = Boolean(enabled);
+  if (!archiveButton) return;
+  archiveButton.dataset.archiveAction = archiveCancelEnabled
+    ? ARCHIVE_BUTTON_ACTION_CANCEL
+    : ARCHIVE_BUTTON_ACTION_ARCHIVE;
+  archiveButton.textContent = archiveCancelEnabled
+    ? ARCHIVE_BUTTON_LABEL_CANCEL
+    : ARCHIVE_BUTTON_LABEL_ARCHIVE;
+}
+
 function loadTransportLedger_() {
   try {
-    const raw = localStorage.getItem(TRANSPORT_LEDGER_KEY);
+    const raw = localStorage.getItem(getScopedStorageKey_(TRANSPORT_LEDGER_KEY));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -1361,7 +1699,7 @@ function loadTransportLedger_() {
 
 function saveTransportLedger_() {
   try {
-    localStorage.setItem(TRANSPORT_LEDGER_KEY, JSON.stringify(transportLedger));
+    localStorage.setItem(getScopedStorageKey_(TRANSPORT_LEDGER_KEY), JSON.stringify(transportLedger));
   } catch (_error) {
     // Ignore storage errors.
   }
@@ -1581,8 +1919,16 @@ async function request(url, options) {
   if (backendMode === 'firebase-required') {
     throw new Error('Firebase接続に失敗しました。設定を確認してください。');
   }
-  if (method !== 'GET' && REQUIRE_LOGIN && !signedInIdToken && backendMode !== 'local') {
-    throw new Error('編集にはGoogleログインが必要です。');
+  if (backendMode === 'firebase' && REQUIRE_LOGIN && !signedInUser) {
+    throw new Error('データ表示にはGoogleログインが必要です。');
+  }
+  if (method !== 'GET' && REQUIRE_LOGIN && backendMode !== 'local') {
+    if (backendMode === 'firebase' && !signedInUser) {
+      throw new Error('編集にはGoogleログインが必要です。');
+    }
+    if (backendMode !== 'firebase' && !signedInIdToken) {
+      throw new Error('編集にはGoogleログインが必要です。');
+    }
   }
 
   if (backendMode === 'firebase') {
@@ -1618,19 +1964,22 @@ async function loadMonthlyData_(options) {
   renderMonthlyViews_();
   applyYearlyOverallValue_();
   try {
-    let data = await loadMonthlyDataFromGas_();
+    let data = null;
+    if (backendMode === 'firebase' && !opts.forceGas) {
+      if (REQUIRE_LOGIN && !signedInUser) {
+        if (requestId !== monthlyLoadRequestId) return;
+        resetMonthlyState_();
+        return;
+      }
+      data = await firebaseLoadMonthly_();
+    } else {
+      data = await loadMonthlyDataFromGas_();
+    }
     const currentMonth = getCurrentMonthLabel_();
     let months = (Array.isArray(data && data.months) ? data.months : [])
       .filter(function(entry) {
         return entry && String(entry.month || '').trim() !== currentMonth;
       });
-    if (!months.length && backendMode === 'firebase' && !opts.forceGas) {
-      data = await firebaseLoadMonthly_();
-      months = (Array.isArray(data && data.months) ? data.months : [])
-        .filter(function(entry) {
-          return entry && String(entry.month || '').trim() !== currentMonth;
-        });
-    }
     if (requestId !== monthlyLoadRequestId) return;
     monthlyState.months = months;
     if (!months.length) {
@@ -1707,6 +2056,8 @@ function convertRequestToGasParams_(url, options) {
     params.set('api', 'dashboard');
   } else if (url === '/api/archive' && method === 'POST') {
     params.set('api', 'archive');
+  } else if (url === '/api/archive/cancel' && method === 'POST') {
+    params.set('api', 'archive-cancel');
   } else if (url === '/api/items' && method === 'POST') {
     const item = options && options.body ? JSON.parse(options.body) : {};
     params.set('api', 'save');
@@ -1743,8 +2094,9 @@ function convertRequestToGasParams_(url, options) {
 }
 
 async function firebaseRequest(url, options) {
-  if (!firebaseItemsCollection) {
-    throw new Error('Firebase初期化に失敗しました。');
+  refreshFirebaseCollectionsForCurrentUser_();
+  if (!hasFirebaseDataAccess_()) {
+    throw new Error('Googleログイン後にデータを表示できます。');
   }
 
   const method = String((options && options.method) || 'GET').toUpperCase();
@@ -1771,6 +2123,9 @@ async function firebaseRequest(url, options) {
   }
   if (url === '/api/archive' && method === 'POST') {
     return firebaseArchive_();
+  }
+  if (url === '/api/archive/cancel' && method === 'POST') {
+    return firebaseArchiveCancel_();
   }
 
   throw new Error('未対応のAPI呼び出しです。');
@@ -1899,17 +2254,29 @@ async function firebaseArchive_() {
   const soldItems = firebaseItemsCache.filter(function(item) {
     return item.status === 'sold';
   });
-  if (!soldItems.length) {
-    return buildDashboardDataFromItems_(firebaseItemsCache);
-  }
-
   const month = getLastMonthLabel_();
   const archivedAt = Date.now();
+  const archiveToken = 'arc_' + archivedAt.toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+  if (!soldItems.length) {
+    await firebaseArchiveMetaRef.set({
+      lastArchive: {
+        month: month,
+        archivedAtMs: archivedAt,
+        archiveToken: archiveToken,
+        itemIds: []
+      },
+      updatedAtMs: archivedAt
+    }, { merge: true });
+    return buildDashboardDataFromItems_(firebaseItemsCache, archivedAt);
+  }
+
   const batch = firebaseDb.batch();
+  const itemIds = soldItems.map(function(item) {
+    return String(item.id || '').trim();
+  }).filter(Boolean);
 
   soldItems.forEach(function(item) {
-    const archiveRef = firebaseDb
-      .collection(FIREBASE_ARCHIVE_COLLECTION)
+    const archiveRef = firebaseArchiveMonthsCollection
       .doc(month)
       .collection('items')
       .doc(item.id);
@@ -1920,10 +2287,20 @@ async function firebaseArchive_() {
       shipping: item.shipping,
       cost: item.cost,
       transport: item.transport,
-      archivedAtMs: archivedAt
+      archivedAtMs: archivedAt,
+      archiveToken: archiveToken
     }, { merge: true });
     batch.delete(firebaseItemsCollection.doc(item.id));
   });
+  batch.set(firebaseArchiveMetaRef, {
+    lastArchive: {
+      month: month,
+      archivedAtMs: archivedAt,
+      archiveToken: archiveToken,
+      itemIds: itemIds
+    },
+    updatedAtMs: archivedAt
+  }, { merge: true });
 
   await batch.commit();
   firebaseItemsCache = firebaseItemsCache.filter(function(item) {
@@ -1932,9 +2309,65 @@ async function firebaseArchive_() {
   return buildDashboardDataFromItems_(firebaseItemsCache, archivedAt);
 }
 
+async function firebaseArchiveCancel_() {
+  const metaRef = firebaseArchiveMetaRef;
+  const metaSnapshot = await metaRef.get();
+  const meta = metaSnapshot.exists ? (metaSnapshot.data() || {}) : {};
+  const lastArchive = meta.lastArchive || null;
+  const month = String(lastArchive && lastArchive.month ? lastArchive.month : '').trim();
+  const archiveToken = String(lastArchive && lastArchive.archiveToken ? lastArchive.archiveToken : '').trim();
+  const itemIds = Array.isArray(lastArchive && lastArchive.itemIds)
+    ? lastArchive.itemIds.map(function(id) { return String(id || '').trim(); }).filter(Boolean)
+    : [];
+
+  if (!/^\d{4}-\d{2}$/.test(month) || !archiveToken) {
+    throw new Error('取り消せる月別アーカイブがありません。');
+  }
+  if (!itemIds.length) {
+    await metaRef.delete();
+    return firebaseLoadDashboard_();
+  }
+
+  const itemSnapshots = await Promise.all(itemIds.map(function(id) {
+    return firebaseArchiveMonthsCollection
+      .doc(month)
+      .collection('items')
+      .doc(id)
+      .get();
+  }));
+  const restorable = itemSnapshots.filter(function(doc) {
+    if (!doc || !doc.exists) return false;
+    const data = doc.data() || {};
+    return String(data.archiveToken || '').trim() === archiveToken;
+  });
+
+  if (!restorable.length) {
+    throw new Error('取り消せる月別アーカイブがありません。');
+  }
+
+  const now = Date.now();
+  const batch = firebaseDb.batch();
+  restorable.forEach(function(doc) {
+    const data = doc.data() || {};
+    batch.set(firebaseItemsCollection.doc(doc.id), {
+      status: normalizeStatusValue_(data.status) || 'sold',
+      name: String(data.name || '').trim(),
+      revenue: sanitizeAmount_(data.revenue),
+      shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
+      cost: sanitizeAmount_(data.cost),
+      transport: sanitizeAmount_(data.transport),
+      updatedAtMs: now
+    }, { merge: true });
+    batch.delete(doc.ref);
+  });
+  batch.delete(metaRef);
+  await batch.commit();
+  return firebaseLoadDashboard_();
+}
+
 async function firebaseLoadMonthly_() {
   const monthMap = new Map();
-  const archiveSnapshot = await firebaseDb.collection(FIREBASE_ARCHIVE_COLLECTION).get();
+  const archiveSnapshot = await firebaseArchiveMonthsCollection.get();
   for (const doc of archiveSnapshot.docs) {
     const month = String(doc.id || '').trim();
     if (!/^\d{4}-\d{2}$/.test(month)) {
@@ -2249,7 +2682,7 @@ function render(data, options) {
 
 function loadCachedDashboard_() {
   try {
-    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    const raw = localStorage.getItem(getScopedStorageKey_(DASHBOARD_CACHE_KEY));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object' || !parsed.summary) return null;
@@ -2263,7 +2696,7 @@ function loadCachedDashboard_() {
 function saveDashboardCache_(data) {
   try {
     if (!data || typeof data !== 'object' || !data.summary) return;
-    localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(data));
+    localStorage.setItem(getScopedStorageKey_(DASHBOARD_CACHE_KEY), JSON.stringify(data));
   } catch (_error) {
     // Ignore storage errors.
   }
