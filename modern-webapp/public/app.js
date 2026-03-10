@@ -23,6 +23,7 @@ const FIREBASE_APPCHECK_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBA
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
 const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
+const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
 
 let backendMode = 'gas';
@@ -58,11 +59,20 @@ const unsoldTableBody = document.getElementById('unsoldTableBody');
 const soldToolbar = document.getElementById('soldToolbar');
 const unsoldToolbar = document.getElementById('unsoldToolbar');
 const quickAddForm = document.getElementById('quickAddForm');
+const quickAddModal = document.getElementById('quickAddModal');
+const openQuickAddButton = document.getElementById('openQuickAddButton');
+const closeQuickAddButton = document.getElementById('closeQuickAddButton');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
 const transportSwitch = document.getElementById('transportSwitch');
 const transportInput = document.getElementById('transportInput');
 const transportClearButton = document.getElementById('transportClearButton');
+const transportLedgerBody = document.getElementById('transportLedgerBody');
+const transportLedgerForm = document.getElementById('transportLedgerForm');
+const transportDateInput = document.getElementById('transportDateInput');
+const transportAmountInput = document.getElementById('transportAmountInput');
+const transportPlaceInput = document.getElementById('transportPlaceInput');
+const transportAddButton = document.getElementById('transportAddButton');
 const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
 const homeView = document.getElementById('homeView');
 const monthlyView = document.getElementById('monthlyView');
@@ -102,6 +112,7 @@ const TRANSPORT_PRESET_VALUES = {
   other: null
 };
 let selectedTransportPreset = '';
+let transportLedger = loadTransportLedger_();
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -117,6 +128,9 @@ async function init() {
   await initializeAuth_();
   await initializeBackend();
   bindEvents();
+  renderTransportLedger_();
+  setDefaultTransportDate_();
+  closeQuickAddModal_({ keepHomeView: true });
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
   if (cachedDashboard) {
@@ -294,6 +308,7 @@ async function initializeAuth_() {
       updateAuthUi_('認証: トークン失敗');
     });
   });
+
 }
 
 async function signInWithGoogle_() {
@@ -391,6 +406,29 @@ function bindEvents() {
     });
   });
 
+  if (openQuickAddButton) {
+    openQuickAddButton.addEventListener('click', function() {
+      openQuickAddModal_();
+    });
+  }
+  if (closeQuickAddButton) {
+    closeQuickAddButton.addEventListener('click', function() {
+      closeQuickAddModal_();
+    });
+  }
+  if (quickAddModal) {
+    quickAddModal.addEventListener('click', function(event) {
+      if (event.target === quickAddModal) {
+        closeQuickAddModal_();
+      }
+    });
+  }
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape' && quickAddModal && quickAddModal.classList.contains('open')) {
+      closeQuickAddModal_();
+    }
+  });
+
   if (transportSwitch) {
     transportSwitch.addEventListener('click', function(event) {
       const button = event.target.closest('button[data-transport-preset]');
@@ -453,14 +491,13 @@ function bindEvents() {
 
   quickAddForm.addEventListener('submit', async function(event) {
     event.preventDefault();
-    const transportCost = getQuickAddTransportAmount_();
     const payload = {
       status: draftStatus,
       name: quickAddForm.name.value.trim(),
       revenue: revenueInput.value,
       shipping: shippingInput.value,
       cost: quickAddForm.cost.value,
-      transport: String(transportCost)
+      transport: '0'
     };
     await runApi(async function() {
       const data = await request('/api/items', {
@@ -473,13 +510,49 @@ function bindEvents() {
       }
       quickAddForm.reset();
       shippingInput.value = '160';
-      applyTransportPreset_('');
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
       scrollToItemRowAndAnimate_(addedItemId, payload.status, 10, addButton);
+      closeQuickAddModal_();
       showToast('商品を追加しました。');
     });
   });
+
+  if (transportLedgerForm) {
+    transportLedgerForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      void runApi(async function() {
+        const amount = sanitizeAmount_(transportAmountInput ? transportAmountInput.value : 0);
+        const place = transportPlaceInput ? String(transportPlaceInput.value || '').trim() : '';
+        const date = transportDateInput && transportDateInput.value
+          ? String(transportDateInput.value)
+          : getTodayDateInput_();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          throw new Error('交通費の日付が不正です。');
+        }
+        if (amount <= 0) {
+          throw new Error('交通費の金額を入力してください。');
+        }
+        if (!place) {
+          throw new Error('交通費の場所を入力してください。');
+        }
+        transportLedger.push({
+          id: createTransportLedgerId_(),
+          date: date,
+          amount: amount,
+          place: place
+        });
+        saveTransportLedger_();
+        renderTransportLedger_();
+        transportLedgerForm.reset();
+        setDefaultTransportDate_();
+        if (currentData && currentData.summary) {
+          applySummary(currentData.summary, currentData.lastUpdated);
+        }
+        showToast('交通費を追加しました。');
+      });
+    });
+  }
 
   soldToolbar.addEventListener('click', function(event) {
     void handleBulkAction('sold', event);
@@ -960,6 +1033,128 @@ function getQuickAddTransportAmount_() {
   return sanitizeAmount_(transportInput.value);
 }
 
+function openQuickAddModal_() {
+  if (!quickAddModal) return;
+  activateView_('home');
+  quickAddModal.classList.add('open');
+  quickAddModal.setAttribute('aria-hidden', 'false');
+  if (quickAddForm && quickAddForm.name) {
+    quickAddForm.name.focus();
+  }
+}
+
+function closeQuickAddModal_(options) {
+  if (!quickAddModal) return;
+  const opts = options || {};
+  quickAddModal.classList.remove('open');
+  quickAddModal.setAttribute('aria-hidden', 'true');
+  if (!opts.keepHomeView) {
+    activateView_('home');
+  }
+}
+
+function loadTransportLedger_() {
+  try {
+    const raw = localStorage.getItem(TRANSPORT_LEDGER_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(normalizeTransportLedgerEntry_)
+      .filter(Boolean);
+  } catch (_error) {
+    return [];
+  }
+}
+
+function saveTransportLedger_() {
+  try {
+    localStorage.setItem(TRANSPORT_LEDGER_KEY, JSON.stringify(transportLedger));
+  } catch (_error) {
+    // Ignore storage errors.
+  }
+}
+
+function normalizeTransportLedgerEntry_(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const date = String(entry.date || '').trim();
+  const place = String(entry.place || '').trim();
+  const amount = sanitizeAmount_(entry.amount);
+  const id = String(entry.id || '').trim() || createTransportLedgerId_();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if (!place) return null;
+  if (amount <= 0) return null;
+  return {
+    id: id,
+    date: date,
+    amount: amount,
+    place: place
+  };
+}
+
+function renderTransportLedger_() {
+  if (!transportLedgerBody) return;
+  const rows = transportLedger
+    .slice()
+    .sort(function(a, b) {
+      const dateCompare = String(b.date || '').localeCompare(String(a.date || ''));
+      if (dateCompare !== 0) return dateCompare;
+      return String(b.id || '').localeCompare(String(a.id || ''));
+    });
+  if (!rows.length) {
+    transportLedgerBody.innerHTML = '<tr class="table-empty"><td colspan="3">交通費はまだありません。</td></tr>';
+    return;
+  }
+  transportLedgerBody.innerHTML = rows.map(function(entry) {
+    return ''
+      + '<tr data-id="' + escapeHtml(entry.id) + '">'
+      + '  <td>' + escapeHtml(entry.date) + '</td>'
+      + '  <td class="money">' + formatYen(entry.amount) + '</td>'
+      + '  <td>' + escapeHtml(entry.place) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function getTransportLedgerTotal_() {
+  return transportLedger.reduce(function(total, entry) {
+    return total + sanitizeAmount_(entry.amount);
+  }, 0);
+}
+
+function getTransportLedgerYearTotal_(year) {
+  const prefix = String(year) + '-';
+  return transportLedger.reduce(function(total, entry) {
+    const date = String(entry && entry.date ? entry.date : '').trim();
+    if (!date.startsWith(prefix)) return total;
+    return total + sanitizeAmount_(entry.amount);
+  }, 0);
+}
+
+function createTransportLedgerId_() {
+  return 'tr_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+function getTodayDateInput_() {
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const year = parts.find(function(part) { return part.type === 'year'; });
+  const month = parts.find(function(part) { return part.type === 'month'; });
+  const day = parts.find(function(part) { return part.type === 'day'; });
+  const y = year ? String(year.value) : '';
+  const m = month ? String(month.value).padStart(2, '0') : '';
+  const d = day ? String(day.value).padStart(2, '0') : '';
+  return y && m && d ? (y + '-' + m + '-' + d) : '';
+}
+
+function setDefaultTransportDate_() {
+  if (!transportDateInput) return;
+  transportDateInput.value = getTodayDateInput_();
+}
+
 async function clearSoldTransport_() {
   const soldItems = Array.isArray(currentData && currentData.soldItems)
     ? currentData.soldItems
@@ -967,10 +1162,25 @@ async function clearSoldTransport_() {
   const targets = soldItems.filter(function(item) {
     return sanitizeAmount_(item.transport) > 0;
   });
+  const hadLedger = getTransportLedgerTotal_() > 0;
 
-  if (!targets.length) {
+  if (hadLedger) {
+    transportLedger = [];
+    saveTransportLedger_();
+    renderTransportLedger_();
+  }
+
+  if (!targets.length && !hadLedger) {
     recalcSummaryFromDom();
     showToast('交通費はすでに0円です。');
+    return;
+  }
+
+  if (!targets.length && hadLedger) {
+    if (currentData && currentData.summary) {
+      applySummary(currentData.summary, currentData.lastUpdated);
+    }
+    showToast('交通費をクリアしました。');
     return;
   }
 
@@ -1605,7 +1815,7 @@ async function runApi(fn) {
 function togglePending(isPending) {
   const bulkButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
-  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton]
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton]
     .concat(viewTabs, bulkButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;
@@ -1812,19 +2022,28 @@ function renderUnsoldRow(item) {
 }
 
 function applySummary(summary, lastUpdated) {
-  const soldProfit = Number(summary.soldProfit || 0);
-  const soldTransport = sanitizeAmount_(summary.soldTransport);
+  const listedTransport = getTransportLedgerTotal_();
+  const baseSoldTransport = sanitizeAmount_(summary.soldTransport);
+  const soldTransport = baseSoldTransport + listedTransport;
+  const soldRevenue = sanitizeAmount_(summary.soldRevenue);
+  const unsoldRevenue = sanitizeAmount_(summary.unsoldRevenue);
+  const soldProfit = Number(summary.soldProfit || 0) - listedTransport;
+  const overallNet = Number(summary.overallNet || 0) - listedTransport;
+  const soldMargin = soldRevenue > 0 ? soldProfit / soldRevenue : 0;
+  const overallMargin = (soldRevenue + unsoldRevenue) > 0
+    ? overallNet / (soldRevenue + unsoldRevenue)
+    : 0;
   soldProfitValue.textContent = formatYen(soldProfit);
   if (soldTransportValue) {
     soldTransportValue.textContent = formatYen(soldTransport);
   }
-  soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
+  soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(soldMargin);
   unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
   unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
-  overallNetValue.textContent = formatSignedYen(summary.overallNet);
-  overallNetValue.style.color = summary.overallNet < 0 ? '#9f3f3f' : '#1f6a52';
+  overallNetValue.textContent = formatSignedYen(overallNet);
+  overallNetValue.style.color = overallNet < 0 ? '#9f3f3f' : '#1f6a52';
   if (overallNetNote) {
-    overallNetNote.textContent = '合計利益率 ' + formatPercent(summary.overallMargin);
+    overallNetNote.textContent = '合計利益率 ' + formatPercent(overallMargin);
   }
   soldCountLabel.textContent = summary.soldCount + '件';
   unsoldCountLabel.textContent = summary.unsoldCount + '件';
@@ -1856,6 +2075,7 @@ function applyYearlyOverallValue_(currentSummary) {
     aggregate.revenue += sanitizeAmount_(summary.soldRevenue) + sanitizeAmount_(summary.unsoldRevenue);
     aggregate.count += sanitizeAmount_(summary.soldCount) + sanitizeAmount_(summary.unsoldCount);
   }
+  aggregate.net -= getTransportLedgerYearTotal_(YEARLY_SUMMARY_YEAR);
   yearlyOverallValue.textContent = formatSignedYen(aggregate.net);
   yearlyOverallValue.style.color = aggregate.net < 0 ? '#9f3f3f' : '#1f6a52';
   if (yearlyOverallNote) {
