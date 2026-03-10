@@ -23,6 +23,7 @@ const FIREBASE_APPCHECK_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBA
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
 const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
+const YEARLY_SUMMARY_YEAR = 2026;
 
 let backendMode = 'gas';
 let firebaseDb = null;
@@ -44,8 +45,7 @@ const unsoldCostValue = document.getElementById('unsoldCostValue');
 const unsoldCostNote = document.getElementById('unsoldCostNote');
 const overallNetValue = document.getElementById('overallNetValue');
 const overallNetNote = document.getElementById('overallNetNote');
-const soldRevenueValue = document.getElementById('soldRevenueValue');
-const lastUpdatedValue = document.getElementById('lastUpdatedValue');
+const yearlyOverallValue = document.getElementById('yearlyOverallValue');
 const soldCountLabel = document.getElementById('soldCountLabel');
 const unsoldCountLabel = document.getElementById('unsoldCountLabel');
 const soldPanel = document.getElementById('soldPanel');
@@ -123,6 +123,7 @@ async function init() {
   } else {
     await reloadData('最新状態を読み込みました。');
   }
+  void loadMonthlyData_({ silent: true });
 }
 
 function setupHeroMascot_() {
@@ -1049,10 +1050,12 @@ async function loadMonthlyData_(options) {
     } else if (!months.some(function(entry) { return entry.month === monthlyState.selectedMonth; })) {
       monthlyState.selectedMonth = months[months.length - 1].month;
     }
+    applyYearlyOverallValue_();
     renderMonthlyViews_();
   } catch (error) {
     monthlyState.months = [];
     monthlyState.selectedMonth = '';
+    applyYearlyOverallValue_();
     renderMonthlyViews_();
     if (!opts.silent) {
       showToast(error.message || '月別データの取得に失敗しました。');
@@ -1822,12 +1825,21 @@ function applySummary(summary, lastUpdated) {
   if (overallNetNote) {
     overallNetNote.textContent = '合計利益率 ' + formatPercent(summary.overallMargin);
   }
-  soldRevenueValue.textContent = formatYen(summary.soldRevenue);
   soldCountLabel.textContent = summary.soldCount + '件';
   unsoldCountLabel.textContent = summary.unsoldCount + '件';
-  if (lastUpdated) {
-    lastUpdatedValue.textContent = '最終更新 ' + lastUpdated;
-  }
+}
+
+function applyYearlyOverallValue_() {
+  if (!yearlyOverallValue) return;
+  const prefix = String(YEARLY_SUMMARY_YEAR) + '-';
+  const total = monthlyState.months.reduce(function(sum, entry) {
+    const month = String(entry && entry.month ? entry.month : '').trim();
+    if (!month.startsWith(prefix)) return sum;
+    const summary = entry && entry.summary ? entry.summary : {};
+    return sum + Number(summary.overallNet || 0);
+  }, 0);
+  yearlyOverallValue.textContent = formatSignedYen(total);
+  yearlyOverallValue.style.color = total < 0 ? '#9f3f3f' : '#1f6a52';
 }
 
 function recalcSummaryFromDom() {
