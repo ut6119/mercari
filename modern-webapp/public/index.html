@@ -128,16 +128,15 @@
       .sold-balance .sold-main .stat-balance-value { font-size: 12px; }
       .sold-balance .sold-transport .stat-balance-value { font-size: 12px; }
       .sold-transport-wrap {
-        position: relative;
-        padding-top: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
       }
       .sold-transport-clear {
-        position: absolute;
-        top: 0;
-        right: 4px;
-        transform: translateY(-45%);
-        z-index: 1;
+        margin-right: 2px;
       }
+      .sold-transport-wrap .sold-transport { width: 100%; }
 
       .view-tabs {
         display: grid;
