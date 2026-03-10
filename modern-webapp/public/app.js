@@ -26,6 +26,7 @@ const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
 const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
 const ENABLE_GIF_EFFECTS = false;
+const ENABLE_CATEGORY_BURST_EFFECTS = true;
 const ENABLE_ADD_BUTTON_PEEK = true;
 const ADD_BUTTON_PEEK_MIN_MS = 1500;
 const ADD_BUTTON_PEEK_MAX_MS = 6000;
@@ -550,8 +551,11 @@ function bindEvents() {
       shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
-      scrollToItemRowAndAnimate_(addedItemId, payload.status, 10, addButton);
       closeQuickAddModal_();
+      const targetItemId = addedItemId || findBottomItemIdByStatus_(payload.status);
+      setTimeout(function() {
+        scrollToItemRowAndAnimate_(targetItemId, payload.status, 10, openQuickAddButton || addButton);
+      }, 80);
       showToast('商品を追加しました。');
     });
   });
@@ -2524,7 +2528,7 @@ function updateRowPreview(row, status) {
 }
 
 function playCategoryBurst_(status, intensity, anchorEl) {
-  if (!ENABLE_GIF_EFFECTS) return;
+  if (!ENABLE_CATEGORY_BURST_EFFECTS) return;
   if (!burstLayer) return;
   if (burstLayer.childElementCount > 14) return;
   const gifUrl = resolveBurstGifUrl_();
@@ -2707,6 +2711,15 @@ function findItemRowById_(itemId, status) {
   const tbody = status === 'sold' ? soldTableBody : unsoldTableBody;
   if (!tbody) return null;
   return tbody.querySelector('tr[data-id="' + cssEscape_(safeId) + '"]');
+}
+
+function findBottomItemIdByStatus_(status) {
+  const tbody = status === 'sold' ? soldTableBody : unsoldTableBody;
+  if (!tbody) return '';
+  const rows = tbody.querySelectorAll('tr[data-id]');
+  if (!rows || rows.length === 0) return '';
+  const lastRow = rows[rows.length - 1];
+  return String(lastRow.dataset.id || '').trim();
 }
 
 function cssEscape_(value) {
