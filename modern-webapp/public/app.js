@@ -984,6 +984,7 @@ function buildSummary_(soldItems, unsoldItems) {
   const soldShipping = soldItems.reduce(function(total, item) { return total + item.shipping; }, 0);
   const soldCost = soldItems.reduce(function(total, item) { return total + item.cost; }, 0);
   const soldProfit = soldItems.reduce(function(total, item) { return total + item.profit; }, 0);
+  const unsoldProfit = unsoldItems.reduce(function(total, item) { return total + item.profit; }, 0);
   const unsoldCost = unsoldItems.reduce(function(total, item) { return total + item.cost; }, 0);
 
   return {
@@ -993,8 +994,9 @@ function buildSummary_(soldItems, unsoldItems) {
     soldCost: soldCost,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldProfit: unsoldProfit,
     unsoldCost: unsoldCost,
-    overallNet: soldProfit - unsoldCost,
+    overallNet: soldProfit + unsoldProfit,
     soldCount: soldItems.length,
     unsoldCount: unsoldItems.length
   };
@@ -1176,7 +1178,7 @@ function renderMonthlyViews_() {
   const summary = selected.summary || {};
   monthlySummaryGrid.innerHTML = [
     ['販売済み利益', formatSignedYen(summary.soldProfit)],
-    ['未販売在庫', formatYen(summary.unsoldCost)],
+    ['未販利益', formatSignedYen(summary.unsoldProfit)],
     ['合計収支', formatSignedYen(summary.overallNet)],
     ['売上合計', formatYen(summary.soldRevenue)]
   ].map(function(metric) {
@@ -1305,6 +1307,7 @@ function recalcSummaryFromDom() {
   let soldShipping = 0;
   let soldCost = 0;
   let soldProfit = 0;
+  let unsoldProfit = 0;
   let unsoldCost = 0;
 
   soldRows.forEach(function(row) {
@@ -1321,7 +1324,13 @@ function recalcSummaryFromDom() {
   });
 
   unsoldRows.forEach(function(row) {
+    const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
+    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
     const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
+    const hasRevenue = revenue > 0;
+    const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
+    const profit = hasRevenue ? (revenue - fee - shipping - cost) : -cost;
+    unsoldProfit += profit;
     unsoldCost += cost;
   });
 
@@ -1332,8 +1341,9 @@ function recalcSummaryFromDom() {
     soldCost: soldCost,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldProfit: unsoldProfit,
     unsoldCost: unsoldCost,
-    overallNet: soldProfit - unsoldCost,
+    overallNet: soldProfit + unsoldProfit,
     soldCount: soldRows.length,
     unsoldCount: unsoldRows.length
   });

@@ -382,7 +382,7 @@ function writeSheetFromItems_(items, targetSheet) {
     '',
     '',
     summary.unsoldCost,
-    -summary.unsoldCost,
+    summary.unsoldProfit,
     '',
     summary.overallNet,
     'summary-unsold',
@@ -543,6 +543,7 @@ function buildSummary_(soldItems, unsoldItems) {
   const soldShipping = sumBy_(soldItems, 'shipping');
   const soldCost = sumBy_(soldItems, 'cost');
   const soldProfit = sumBy_(soldItems, 'profit');
+  const unsoldProfit = sumBy_(unsoldItems, 'profit');
   const unsoldCost = sumBy_(unsoldItems, 'cost');
 
   return {
@@ -552,8 +553,9 @@ function buildSummary_(soldItems, unsoldItems) {
     soldCost: soldCost,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldProfit: unsoldProfit,
     unsoldCost: unsoldCost,
-    overallNet: soldProfit - unsoldCost,
+    overallNet: soldProfit + unsoldProfit,
     soldCount: soldItems.length,
     unsoldCount: unsoldItems.length
   };
