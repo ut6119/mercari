@@ -1827,17 +1827,31 @@ function applySummary(summary, lastUpdated) {
   }
   soldCountLabel.textContent = summary.soldCount + '件';
   unsoldCountLabel.textContent = summary.unsoldCount + '件';
+  applyYearlyOverallValue_(Number(summary.overallNet || 0));
 }
 
-function applyYearlyOverallValue_() {
+function applyYearlyOverallValue_(currentOverallNet) {
   if (!yearlyOverallValue) return;
   const prefix = String(YEARLY_SUMMARY_YEAR) + '-';
-  const total = monthlyState.months.reduce(function(sum, entry) {
+  let total = monthlyState.months.reduce(function(sum, entry) {
     const month = String(entry && entry.month ? entry.month : '').trim();
     if (!month.startsWith(prefix)) return sum;
     const summary = entry && entry.summary ? entry.summary : {};
     return sum + Number(summary.overallNet || 0);
   }, 0);
+  const currentMonth = getCurrentMonthLabel_();
+  const isTargetYearCurrentMonth = currentMonth.startsWith(prefix);
+  const hasCurrentMonthEntry = monthlyState.months.some(function(entry) {
+    return String(entry && entry.month ? entry.month : '').trim() === currentMonth;
+  });
+  if (isTargetYearCurrentMonth && !hasCurrentMonthEntry) {
+    const currentNet = Number(
+      typeof currentOverallNet === 'number'
+        ? currentOverallNet
+        : (currentData && currentData.summary ? currentData.summary.overallNet : 0)
+    );
+    total += currentNet;
+  }
   yearlyOverallValue.textContent = formatSignedYen(total);
   yearlyOverallValue.style.color = total < 0 ? '#9f3f3f' : '#1f6a52';
 }
