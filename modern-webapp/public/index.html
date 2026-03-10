@@ -111,7 +111,7 @@
         margin-top: 6px;
       }
       .stat-balance.sold-balance {
-        grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
       }
       .stat-balance-item {
         border: 1px solid #d7e2f4;
@@ -121,6 +121,12 @@
       }
       .stat-balance-label { font-size: 10px; color: #5f6980; white-space: nowrap; }
       .stat-balance-value { margin-top: 1px; font-size: 13px; font-weight: 700; }
+      .sold-balance .stat-balance-value {
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .sold-balance .sold-main .stat-balance-value { font-size: 12px; }
+      .sold-balance .sold-transport .stat-balance-value { font-size: 12px; }
 
       .view-tabs {
         display: grid;
@@ -510,11 +516,11 @@
           <div class="stat">
             <div class="stat-label">販売済み利益</div>
             <div class="stat-balance sold-balance">
-              <div class="stat-balance-item">
+              <div class="stat-balance-item sold-main">
                 <div class="stat-balance-label">販売済み利益</div>
                 <div class="stat-balance-value" id="soldProfitValue">¥0</div>
               </div>
-              <div class="stat-balance-item">
+              <div class="stat-balance-item sold-transport">
                 <div class="stat-balance-label">交通費</div>
                 <div class="stat-balance-value" id="soldTransportValue">¥0</div>
               </div>
