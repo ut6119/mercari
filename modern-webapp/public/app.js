@@ -1866,7 +1866,7 @@ function playCategoryBurst_(status, intensity, anchorEl) {
     sprite.style.setProperty('--to-scale', toScale);
     sprite.style.setProperty('--from-rotate', fromRotate + 'deg');
     sprite.style.setProperty('--to-rotate', toRotate + 'deg');
-    sprite.style.animationDuration = Math.round(1900 + Math.random() * 900) + 'ms';
+    sprite.style.animationDuration = '3000ms';
     sprite.style.animationDelay = Math.round(Math.random() * 120) + 'ms';
     sprite.addEventListener('animationend', function() {
       sprite.remove();
