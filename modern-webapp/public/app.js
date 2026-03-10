@@ -55,6 +55,7 @@ const soldCountLabel = document.getElementById('soldCountLabel');
 const unsoldCountLabel = document.getElementById('unsoldCountLabel');
 const soldPanel = document.getElementById('soldPanel');
 const unsoldPanel = document.getElementById('unsoldPanel');
+const transportLedgerPanel = document.getElementById('transportLedgerPanel');
 const soldSelectedCount = document.getElementById('soldSelectedCount');
 const unsoldSelectedCount = document.getElementById('unsoldSelectedCount');
 const soldTableBody = document.getElementById('soldTableBody');
@@ -71,12 +72,17 @@ const transportSwitch = document.getElementById('transportSwitch');
 const transportInput = document.getElementById('transportInput');
 const transportClearButton = document.getElementById('transportClearButton');
 const transportLedgerBody = document.getElementById('transportLedgerBody');
+const transportCountLabel = document.getElementById('transportCountLabel');
+const transportLedgerToolbar = document.getElementById('transportLedgerToolbar');
+const transportSelectedCount = document.getElementById('transportSelectedCount');
 const transportLedgerForm = document.getElementById('transportLedgerForm');
 const transportPresetSwitch = document.getElementById('transportPresetSwitch');
 const transportDateInput = document.getElementById('transportDateInput');
 const transportAmountInput = document.getElementById('transportAmountInput');
 const transportPlaceInput = document.getElementById('transportPlaceInput');
 const transportAddButton = document.getElementById('transportAddButton');
+const transportUndoButton = document.getElementById('transportUndoButton');
+const transportRedoButton = document.getElementById('transportRedoButton');
 const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
 const homeView = document.getElementById('homeView');
 const monthlyView = document.getElementById('monthlyView');
@@ -124,6 +130,11 @@ const TRANSPORT_PRESET_LABELS = {
 let selectedTransportPreset = '';
 let selectedTransportLedgerPreset = '';
 let transportLedger = loadTransportLedger_();
+let transportSelectionMode = false;
+const selectedTransportLedgerIds = new Set();
+const transportHistoryPast = [];
+const transportHistoryFuture = [];
+const TRANSPORT_HISTORY_LIMIT = 40;
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -564,12 +575,14 @@ function bindEvents() {
         if (!place) {
           throw new Error('交通費の場所を入力してください。');
         }
+        pushTransportHistory_();
         transportLedger.push({
           id: createTransportLedgerId_(),
           date: date,
           amount: amount,
           place: place
         });
+        transportHistoryFuture.length = 0;
         saveTransportLedger_();
         renderTransportLedger_();
         transportLedgerForm.reset();
@@ -580,6 +593,39 @@ function bindEvents() {
         }
         showToast('交通費を追加しました。');
       });
+    });
+  }
+  if (transportLedgerToolbar) {
+    transportLedgerToolbar.addEventListener('click', function(event) {
+      const button = event.target.closest('button[data-transport-action]');
+      if (!button) return;
+      const action = String(button.dataset.transportAction || '').trim();
+      void handleTransportLedgerAction_(action);
+    });
+  }
+  if (transportLedgerBody) {
+    transportLedgerBody.addEventListener('change', function(event) {
+      const checkbox = event.target.closest('[data-select-transport]');
+      if (!checkbox) return;
+      const row = checkbox.closest('tr[data-id]');
+      const id = row ? String(row.dataset.id || '').trim() : '';
+      if (!id) return;
+      if (checkbox.checked) {
+        selectedTransportLedgerIds.add(id);
+      } else {
+        selectedTransportLedgerIds.delete(id);
+      }
+      updateTransportSelectedCount_();
+    });
+  }
+  if (transportUndoButton) {
+    transportUndoButton.addEventListener('click', function() {
+      void handleTransportUndo_();
+    });
+  }
+  if (transportRedoButton) {
+    transportRedoButton.addEventListener('click', function() {
+      void handleTransportRedo_();
     });
   }
 
@@ -937,6 +983,164 @@ function updateSelectAllButtonLabel(status) {
   button.textContent = '全選択';
 }
 
+function trimTransportHistory_(stack) {
+  while (stack.length > TRANSPORT_HISTORY_LIMIT) {
+    stack.shift();
+  }
+}
+
+function createTransportLedgerSnapshot_() {
+  return transportLedger.map(function(entry) {
+    return {
+      id: String(entry.id || ''),
+      date: String(entry.date || ''),
+      amount: sanitizeAmount_(entry.amount),
+      place: String(entry.place || '')
+    };
+  });
+}
+
+function pushTransportHistory_() {
+  transportHistoryPast.push(createTransportLedgerSnapshot_());
+  trimTransportHistory_(transportHistoryPast);
+}
+
+function updateTransportCountLabel_() {
+  if (!transportCountLabel) return;
+  transportCountLabel.textContent = transportLedger.length + '件';
+}
+
+function updateTransportSelectedCount_() {
+  if (!transportSelectedCount) return;
+  transportSelectedCount.textContent = selectedTransportLedgerIds.size + '件選択';
+}
+
+function updateTransportHistoryButtons_() {
+  if (transportUndoButton) {
+    transportUndoButton.disabled = pending || transportHistoryPast.length === 0;
+  }
+  if (transportRedoButton) {
+    transportRedoButton.disabled = pending || transportHistoryFuture.length === 0;
+  }
+}
+
+function setTransportSelectionMode_(enabled) {
+  transportSelectionMode = Boolean(enabled);
+  if (!transportSelectionMode) {
+    selectedTransportLedgerIds.clear();
+  }
+  if (transportLedgerPanel) {
+    transportLedgerPanel.classList.toggle('selection-mode', transportSelectionMode);
+  }
+  if (transportLedgerToolbar) {
+    const toggleButton = transportLedgerToolbar.querySelector('[data-transport-action="toggle-selection"]');
+    if (toggleButton) {
+      toggleButton.textContent = transportSelectionMode ? '解除' : '選択';
+    }
+  }
+  renderTransportLedger_();
+}
+
+function setAllTransportRowsSelected_(checked) {
+  if (!checked) {
+    selectedTransportLedgerIds.clear();
+    renderTransportLedger_();
+    return;
+  }
+  selectedTransportLedgerIds.clear();
+  transportLedger.forEach(function(entry) {
+    selectedTransportLedgerIds.add(String(entry.id || '').trim());
+  });
+  renderTransportLedger_();
+}
+
+async function handleTransportLedgerAction_(action) {
+  if (action === 'toggle-selection') {
+    setTransportSelectionMode_(!transportSelectionMode);
+    return;
+  }
+
+  if (action === 'toggle-select-all') {
+    if (!transportSelectionMode) {
+      setTransportSelectionMode_(true);
+    }
+    const shouldSelectAll = transportLedger.length > 0 && selectedTransportLedgerIds.size < transportLedger.length;
+    setAllTransportRowsSelected_(shouldSelectAll);
+    return;
+  }
+
+  if (action === 'delete') {
+    if (!transportSelectionMode) {
+      setTransportSelectionMode_(true);
+      showToast('行を選択してください。');
+      return;
+    }
+    const selectedIds = Array.from(selectedTransportLedgerIds);
+    if (!selectedIds.length) {
+      showToast('先に行を選択してください。');
+      return;
+    }
+    if (!window.confirm('選択した交通費を削除しますか？')) return;
+
+    await runApi(async function() {
+      pushTransportHistory_();
+      transportHistoryFuture.length = 0;
+      const idSet = new Set(selectedIds);
+      transportLedger = transportLedger.filter(function(entry) {
+        return !idSet.has(String(entry.id || '').trim());
+      });
+      saveTransportLedger_();
+      setTransportSelectionMode_(false);
+      if (currentData && currentData.summary) {
+        applySummary(currentData.summary, currentData.lastUpdated);
+      }
+      showToast('交通費を削除しました。');
+    });
+  }
+}
+
+async function handleTransportUndo_() {
+  if (!transportHistoryPast.length) {
+    showToast('これ以上戻せません。');
+    return;
+  }
+  await runApi(async function() {
+    transportHistoryFuture.push(createTransportLedgerSnapshot_());
+    trimTransportHistory_(transportHistoryFuture);
+    const snapshot = transportHistoryPast.pop();
+    transportLedger = (Array.isArray(snapshot) ? snapshot : [])
+      .map(normalizeTransportLedgerEntry_)
+      .filter(Boolean);
+    saveTransportLedger_();
+    setTransportSelectionMode_(false);
+    if (currentData && currentData.summary) {
+      applySummary(currentData.summary, currentData.lastUpdated);
+    }
+    showToast('戻しました。');
+  });
+}
+
+async function handleTransportRedo_() {
+  if (!transportHistoryFuture.length) {
+    showToast('これ以上進めません。');
+    return;
+  }
+  await runApi(async function() {
+    transportHistoryPast.push(createTransportLedgerSnapshot_());
+    trimTransportHistory_(transportHistoryPast);
+    const snapshot = transportHistoryFuture.pop();
+    transportLedger = (Array.isArray(snapshot) ? snapshot : [])
+      .map(normalizeTransportLedgerEntry_)
+      .filter(Boolean);
+    saveTransportLedger_();
+    setTransportSelectionMode_(false);
+    if (currentData && currentData.summary) {
+      applySummary(currentData.summary, currentData.lastUpdated);
+    }
+    showToast('進めました。');
+  });
+}
+
 function scheduleAutoSave(row, status) {
   if (!row || !row.dataset.id) return;
   const rowId = row.dataset.id;
@@ -1164,6 +1368,9 @@ function normalizeTransportLedgerEntry_(entry) {
 
 function renderTransportLedger_() {
   if (!transportLedgerBody) return;
+  if (transportLedgerPanel) {
+    transportLedgerPanel.classList.toggle('selection-mode', transportSelectionMode);
+  }
   const rows = transportLedger
     .slice()
     .sort(function(a, b) {
@@ -1171,18 +1378,36 @@ function renderTransportLedger_() {
       if (dateCompare !== 0) return dateCompare;
       return String(b.id || '').localeCompare(String(a.id || ''));
     });
+  const validIdSet = new Set(rows.map(function(entry) { return String(entry.id || '').trim(); }));
+  Array.from(selectedTransportLedgerIds).forEach(function(id) {
+    if (!validIdSet.has(String(id || '').trim())) {
+      selectedTransportLedgerIds.delete(id);
+    }
+  });
+  if (!transportSelectionMode) {
+    selectedTransportLedgerIds.clear();
+  }
   if (!rows.length) {
-    transportLedgerBody.innerHTML = '<tr class="table-empty"><td colspan="3">交通費はまだありません。</td></tr>';
+    transportLedgerBody.innerHTML = '<tr class="table-empty"><td colspan="4">交通費はまだありません。</td></tr>';
+    updateTransportCountLabel_();
+    updateTransportSelectedCount_();
+    updateTransportHistoryButtons_();
     return;
   }
   transportLedgerBody.innerHTML = rows.map(function(entry) {
+    const id = String(entry.id || '').trim();
+    const checkedAttr = selectedTransportLedgerIds.has(id) ? ' checked' : '';
     return ''
-      + '<tr data-id="' + escapeHtml(entry.id) + '">'
+      + '<tr data-id="' + escapeHtml(id) + '">'
+      + '  <td class="selection-cell"><input data-select-transport type="checkbox" aria-label="選択"' + checkedAttr + '></td>'
       + '  <td>' + escapeHtml(entry.date) + '</td>'
       + '  <td class="money">' + formatYen(entry.amount) + '</td>'
       + '  <td>' + escapeHtml(entry.place) + '</td>'
       + '</tr>';
   }).join('');
+  updateTransportCountLabel_();
+  updateTransportSelectedCount_();
+  updateTransportHistoryButtons_();
 }
 
 function getTransportLedgerTotal_() {
@@ -1235,8 +1460,12 @@ async function clearSoldTransport_() {
   const hadLedger = getTransportLedgerTotal_() > 0;
 
   if (hadLedger) {
+    pushTransportHistory_();
+    transportHistoryFuture.length = 0;
     transportLedger = [];
     saveTransportLedger_();
+    selectedTransportLedgerIds.clear();
+    transportSelectionMode = false;
     renderTransportLedger_();
   }
 
@@ -1892,9 +2121,10 @@ async function runApi(fn) {
 
 function togglePending(isPending) {
   const bulkButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
+  const transportButtons = Array.from(document.querySelectorAll('[data-transport-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
   [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton]
-    .concat(viewTabs, bulkButtons, monthButtons)
+    .concat(viewTabs, bulkButtons, transportButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;
     button.disabled = isPending;
@@ -1911,6 +2141,7 @@ function updateHistoryButtons_() {
   [soldRedoButton, unsoldRedoButton].forEach(function(button) {
     if (button) button.disabled = pending || historyFuture.length === 0;
   });
+  updateTransportHistoryButtons_();
 }
 
 function render(data, options) {

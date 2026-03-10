@@ -695,18 +695,30 @@
                 <h3>交通費一覧</h3>
                 <div class="board-head-right">
                   <button class="button button-secondary board-head-action" id="transportClearButton" type="button">削除</button>
+                  <span id="transportCountLabel">0件</span>
                 </div>
+              </div>
+              <div class="bulk-toolbar" id="transportLedgerToolbar">
+                <button class="button button-secondary bulk-button" type="button" data-transport-action="toggle-selection">選択</button>
+                <button class="button button-secondary bulk-button bulk-only" type="button" data-transport-action="toggle-select-all">全選択</button>
+                <button class="button button-danger bulk-button bulk-only" type="button" data-transport-action="delete">削除</button>
+                <div class="history-buttons">
+                  <button class="button button-secondary bulk-button" id="transportUndoButton" type="button">戻る</button>
+                  <button class="button button-secondary bulk-button" id="transportRedoButton" type="button">進む</button>
+                </div>
+                <span class="bulk-count bulk-only" id="transportSelectedCount">0件選択</span>
               </div>
               <div class="table-wrap">
                 <table class="compact-table">
                   <colgroup>
-                    <col style="width: 28%;">
-                    <col style="width: 24%;">
-                    <col style="width: 48%;">
+                    <col class="col-select">
+                    <col style="width: 25%;">
+                    <col style="width: 22%;">
+                    <col style="width: 53%;">
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>日付</th><th class="center">金額</th><th>場所</th>
+                      <th class="center selection-col">選択</th><th>日付</th><th class="center">金額</th><th>場所</th>
                     </tr>
                   </thead>
                   <tbody id="transportLedgerBody"></tbody>
