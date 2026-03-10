@@ -563,7 +563,13 @@ function bindEvents() {
       closeQuickAddModal_();
       const targetItemId = addedItemId || findBottomItemIdByStatus_(payload.status);
       setTimeout(function() {
-        scrollToItemRowAndAnimate_(targetItemId, payload.status, 10, openQuickAddButton || addButton);
+        scrollToItemRowAndAnimate_(
+          targetItemId,
+          payload.status,
+          10,
+          openQuickAddButton || addButton,
+          { burst: false, namePeek: true }
+        );
       }, 80);
       showToast('商品を追加しました。');
     });
@@ -2730,14 +2736,22 @@ function getStatusItems_(data, status) {
   return Array.isArray(data.unsoldItems) ? data.unsoldItems : [];
 }
 
-function scrollToItemRowAndAnimate_(itemId, status, intensity, fallbackAnchorEl) {
+function scrollToItemRowAndAnimate_(itemId, status, intensity, fallbackAnchorEl, options) {
+  const opts = options || {};
+  const shouldBurst = opts.burst !== false;
+  const shouldNamePeek = Boolean(opts.namePeek);
+
   if (!itemId) {
-    playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    if (shouldBurst) {
+      playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    }
     return;
   }
   const row = findItemRowById_(itemId, status);
   if (!row) {
-    playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    if (shouldBurst) {
+      playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    }
     return;
   }
 
@@ -2752,8 +2766,13 @@ function scrollToItemRowAndAnimate_(itemId, status, intensity, fallbackAnchorEl)
   row.classList.add('row-focus-flash');
 
   setTimeout(function() {
-    playCategoryBurst_(status, intensity, row);
-  }, 650);
+    if (shouldNamePeek) {
+      playRowNamePeek_(row);
+    }
+    if (shouldBurst) {
+      playCategoryBurst_(status, intensity, row);
+    }
+  }, shouldNamePeek ? 1500 : 650);
 }
 
 function scrollToMovedRowsAndAnimate_(itemIds, status, intensity, fallbackAnchorEl) {
@@ -2828,6 +2847,40 @@ function findItemRowById_(itemId, status) {
   const tbody = status === 'sold' ? soldTableBody : unsoldTableBody;
   if (!tbody) return null;
   return tbody.querySelector('tr[data-id="' + cssEscape_(safeId) + '"]');
+}
+
+function playRowNamePeek_(row) {
+  if (!row || !burstLayer) return;
+  if (burstLayer.childElementCount > 10) return;
+  const gifUrl = resolveBurstGifUrl_();
+  if (!gifUrl) return;
+
+  const anchor = row.querySelector('[data-field="name"]') || row.querySelector('td');
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  if (!isRectVisibleInViewport_(rect)) return;
+
+  const size = Math.round(52 + Math.random() * 14);
+  const x = rect.left + Math.min(18, Math.max(8, rect.width * 0.12));
+  const y = rect.top + Math.min(12, Math.max(4, rect.height * 0.18));
+  const animMin = Math.max(200, ADD_BUTTON_PEEK_ANIM_MIN_MS);
+  const animMax = Math.max(animMin, ADD_BUTTON_PEEK_ANIM_MAX_MS);
+  const animDuration = animMin + Math.floor(Math.random() * (animMax - animMin + 1));
+
+  const sprite = document.createElement('img');
+  sprite.className = 'add-peek-gif';
+  sprite.src = gifUrl;
+  sprite.alt = '';
+  sprite.decoding = 'async';
+  sprite.loading = 'eager';
+  sprite.style.left = x.toFixed(1) + 'px';
+  sprite.style.top = y.toFixed(1) + 'px';
+  sprite.style.setProperty('--size', size + 'px');
+  sprite.style.animationDuration = animDuration + 'ms';
+  sprite.addEventListener('animationend', function() {
+    sprite.remove();
+  }, { once: true });
+  burstLayer.appendChild(sprite);
 }
 
 function findBottomItemIdByStatus_(status) {
