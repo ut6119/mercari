@@ -1608,6 +1608,7 @@ function updateRowPreview(row, status) {
 
 function playCategoryBurst_(status, intensity, anchorEl) {
   if (!burstLayer) return;
+  if (burstLayer.childElementCount > 14) return;
   const gifUrl = resolveBurstGifUrl_();
   if (!gifUrl) return;
 
@@ -1627,14 +1628,14 @@ function playCategoryBurst_(status, intensity, anchorEl) {
   }
   centerX -= 18;
   centerY += 14;
-  const count = Math.max(6, Math.min(18, Number(intensity) || 10));
+  const count = Math.max(4, Math.min(10, Number(intensity) || 8));
 
   for (let i = 0; i < count; i += 1) {
     const angle = ((Math.PI * 2) / count) * i + ((Math.random() - 0.5) * 0.5);
     const distance = 72 + Math.random() * 120;
     const dx = Math.cos(angle) * distance;
     const dy = Math.sin(angle) * distance + ((Math.random() - 0.5) * 26);
-    const size = Math.round(26 + Math.random() * 62);
+    const size = Math.round(24 + Math.random() * 54);
     const fromScale = (0.45 + Math.random() * 0.7).toFixed(2);
     const toScale = (0.12 + Math.random() * 0.34).toFixed(2);
     const fromRotate = Math.round((Math.random() * 90) - 45);
@@ -1656,8 +1657,8 @@ function playCategoryBurst_(status, intensity, anchorEl) {
     sprite.style.setProperty('--to-scale', toScale);
     sprite.style.setProperty('--from-rotate', fromRotate + 'deg');
     sprite.style.setProperty('--to-rotate', toRotate + 'deg');
-    sprite.style.animationDuration = Math.round(1500 + Math.random() * 820) + 'ms';
-    sprite.style.animationDelay = Math.round(Math.random() * 200) + 'ms';
+    sprite.style.animationDuration = Math.round(1150 + Math.random() * 520) + 'ms';
+    sprite.style.animationDelay = Math.round(Math.random() * 120) + 'ms';
     sprite.addEventListener('animationend', function() {
       sprite.remove();
     }, { once: true });
