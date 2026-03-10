@@ -46,6 +46,7 @@ const unsoldCostNote = document.getElementById('unsoldCostNote');
 const overallNetValue = document.getElementById('overallNetValue');
 const overallNetNote = document.getElementById('overallNetNote');
 const yearlyOverallValue = document.getElementById('yearlyOverallValue');
+const yearlyOverallNote = document.getElementById('yearlyOverallNote');
 const soldCountLabel = document.getElementById('soldCountLabel');
 const unsoldCountLabel = document.getElementById('unsoldCountLabel');
 const soldPanel = document.getElementById('soldPanel');
@@ -1827,33 +1828,40 @@ function applySummary(summary, lastUpdated) {
   }
   soldCountLabel.textContent = summary.soldCount + '件';
   unsoldCountLabel.textContent = summary.unsoldCount + '件';
-  applyYearlyOverallValue_(Number(summary.overallNet || 0));
+  applyYearlyOverallValue_(summary);
 }
 
-function applyYearlyOverallValue_(currentOverallNet) {
+function applyYearlyOverallValue_(currentSummary) {
   if (!yearlyOverallValue) return;
   const prefix = String(YEARLY_SUMMARY_YEAR) + '-';
-  let total = monthlyState.months.reduce(function(sum, entry) {
+  const aggregate = monthlyState.months.reduce(function(acc, entry) {
     const month = String(entry && entry.month ? entry.month : '').trim();
-    if (!month.startsWith(prefix)) return sum;
+    if (!month.startsWith(prefix)) return acc;
     const summary = entry && entry.summary ? entry.summary : {};
-    return sum + Number(summary.overallNet || 0);
-  }, 0);
+    acc.net += Number(summary.overallNet || 0);
+    acc.revenue += sanitizeAmount_(summary.soldRevenue) + sanitizeAmount_(summary.unsoldRevenue);
+    acc.count += sanitizeAmount_(summary.soldCount) + sanitizeAmount_(summary.unsoldCount);
+    return acc;
+  }, { net: 0, revenue: 0, count: 0 });
   const currentMonth = getCurrentMonthLabel_();
   const isTargetYearCurrentMonth = currentMonth.startsWith(prefix);
   const hasCurrentMonthEntry = monthlyState.months.some(function(entry) {
     return String(entry && entry.month ? entry.month : '').trim() === currentMonth;
   });
   if (isTargetYearCurrentMonth && !hasCurrentMonthEntry) {
-    const currentNet = Number(
-      typeof currentOverallNet === 'number'
-        ? currentOverallNet
-        : (currentData && currentData.summary ? currentData.summary.overallNet : 0)
-    );
-    total += currentNet;
+    const summary = (currentSummary && typeof currentSummary === 'object')
+      ? currentSummary
+      : (currentData && currentData.summary ? currentData.summary : {});
+    aggregate.net += Number(summary.overallNet || 0);
+    aggregate.revenue += sanitizeAmount_(summary.soldRevenue) + sanitizeAmount_(summary.unsoldRevenue);
+    aggregate.count += sanitizeAmount_(summary.soldCount) + sanitizeAmount_(summary.unsoldCount);
   }
-  yearlyOverallValue.textContent = formatSignedYen(total);
-  yearlyOverallValue.style.color = total < 0 ? '#9f3f3f' : '#1f6a52';
+  yearlyOverallValue.textContent = formatSignedYen(aggregate.net);
+  yearlyOverallValue.style.color = aggregate.net < 0 ? '#9f3f3f' : '#1f6a52';
+  if (yearlyOverallNote) {
+    const margin = aggregate.revenue > 0 ? aggregate.net / aggregate.revenue : 0;
+    yearlyOverallNote.textContent = aggregate.count + '件 / 利益率 ' + formatPercent(margin);
+  }
 }
 
 function recalcSummaryFromDom() {
