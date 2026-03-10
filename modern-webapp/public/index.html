@@ -127,6 +127,12 @@
       }
       .sold-balance .sold-main .stat-balance-value { font-size: 12px; }
       .sold-balance .sold-transport .stat-balance-value { font-size: 12px; }
+      .sold-transport-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+      }
 
       .view-tabs {
         display: grid;
@@ -294,21 +300,13 @@
         gap: 8px;
         margin-bottom: 8px;
       }
-      .transport-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        margin-bottom: 6px;
-      }
-      .transport-row label { margin-bottom: 0; }
       .transport-clear-button {
-        padding: 4px 8px;
+        padding: 3px 7px;
         border-radius: 999px;
         border: 1px solid #d8dfeb;
         background: #f5f7fc;
         color: #4d5a73;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
       }
       .transport-button {
@@ -538,7 +536,10 @@
                 <div class="stat-balance-value" id="soldProfitValue">¥0</div>
               </div>
               <div class="stat-balance-item sold-transport">
-                <div class="stat-balance-label">交通費</div>
+                <div class="sold-transport-head">
+                  <div class="stat-balance-label">交通費</div>
+                  <button class="transport-clear-button" id="transportClearButton" type="button">削除</button>
+                </div>
                 <div class="stat-balance-value" id="soldTransportValue">¥0</div>
               </div>
             </div>
@@ -681,10 +682,7 @@
                 <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
               </div>
               <div class="field">
-                <div class="transport-row">
-                  <label for="transportInput">交通費</label>
-                  <button class="transport-clear-button" id="transportClearButton" type="button">削除</button>
-                </div>
+                <label for="transportInput">交通費</label>
                 <div class="transport-switch" id="transportSwitch">
                   <button class="transport-button" type="button" data-transport-preset="tennoji">天王寺</button>
                   <button class="transport-button" type="button" data-transport-preset="namba">難波</button>
