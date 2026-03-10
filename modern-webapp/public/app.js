@@ -38,7 +38,6 @@ const monthlyState = {
 };
 
 const soldProfitValue = document.getElementById('soldProfitValue');
-const soldProfitGrossValue = document.getElementById('soldProfitGrossValue');
 const soldTransportValue = document.getElementById('soldTransportValue');
 const soldProfitNote = document.getElementById('soldProfitNote');
 const unsoldCostValue = document.getElementById('unsoldCostValue');
@@ -1768,12 +1767,8 @@ function renderUnsoldRow(item) {
 
 function applySummary(summary, lastUpdated) {
   const soldProfit = Number(summary.soldProfit || 0);
-  const soldProfitGross = Number(typeof summary.soldProfitGross !== 'undefined' ? summary.soldProfitGross : soldProfit);
   const soldTransport = sanitizeAmount_(summary.soldTransport);
   soldProfitValue.textContent = formatYen(soldProfit);
-  if (soldProfitGrossValue) {
-    soldProfitGrossValue.textContent = formatYen(soldProfitGross);
-  }
   if (soldTransportValue) {
     soldTransportValue.textContent = formatSignedYen(-soldTransport);
   }

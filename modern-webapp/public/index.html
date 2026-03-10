@@ -108,16 +108,16 @@
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
-        margin-top: 8px;
+        margin-top: 6px;
       }
       .stat-balance-item {
         border: 1px solid #d7e2f4;
         border-radius: 10px;
         background: rgba(255, 255, 255, 0.88);
-        padding: 6px 8px;
+        padding: 5px 7px;
       }
       .stat-balance-label { font-size: 10px; color: #5f6980; }
-      .stat-balance-value { margin-top: 2px; font-size: 14px; font-weight: 700; }
+      .stat-balance-value { margin-top: 1px; font-size: 13px; font-weight: 700; }
 
       .view-tabs {
         display: grid;
@@ -478,7 +478,6 @@
         .view-tab { font-size: 12px; padding: 9px 6px; }
         .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .stat-balance { grid-template-columns: 1fr; }
         .monthly-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .chart-row { grid-template-columns: 56px 1fr; }
         .chart-values { grid-column: 1 / -1; text-align: left; min-width: 0; }
@@ -507,11 +506,10 @@
         <div class="stats">
           <div class="stat">
             <div class="stat-label">販売済み利益</div>
-            <div class="stat-value" id="soldProfitValue">¥0</div>
             <div class="stat-balance">
               <div class="stat-balance-item">
-                <div class="stat-balance-label">商品利益</div>
-                <div class="stat-balance-value" id="soldProfitGrossValue">¥0</div>
+                <div class="stat-balance-label">販売済み利益</div>
+                <div class="stat-balance-value" id="soldProfitValue">¥0</div>
               </div>
               <div class="stat-balance-item">
                 <div class="stat-balance-label">交通費</div>
