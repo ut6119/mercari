@@ -36,8 +36,10 @@ let signedInUser = null;
 let signedInIdToken = '';
 const monthlyState = {
   months: [],
-  selectedMonth: ''
+  selectedMonth: '',
+  loading: false
 };
+let monthlyLoadRequestId = 0;
 
 const soldProfitValue = document.getElementById('soldProfitValue');
 const soldTransportValue = document.getElementById('soldTransportValue');
@@ -138,7 +140,7 @@ async function init() {
   } else {
     await reloadData('最新状態を読み込みました。');
   }
-  void loadMonthlyData_({ silent: true });
+  void loadMonthlyData_({ silent: true, forceGas: true });
 }
 
 function setupHeroMascot_() {
@@ -400,8 +402,8 @@ function bindEvents() {
       const target = String(button.dataset.viewTab || '').trim();
       if (!target) return;
       activateView_(target);
-      if ((target === 'monthly' || target === 'chart') && monthlyState.months.length === 0) {
-        void loadMonthlyData_();
+      if (target === 'monthly' || target === 'chart') {
+        void loadMonthlyData_({ forceGas: true });
       }
     });
   });
@@ -484,7 +486,7 @@ function bindEvents() {
     await runApi(async function() {
       const data = await request('/api/archive', { method: 'POST' });
       render(data);
-      await loadMonthlyData_({ silent: true });
+      await loadMonthlyData_({ silent: true, forceGas: true });
       showToast('前月アーカイブが完了しました。');
     });
   });
@@ -1241,6 +1243,10 @@ async function request(url, options) {
 
 async function loadMonthlyData_(options) {
   const opts = options || {};
+  const requestId = ++monthlyLoadRequestId;
+  monthlyState.loading = true;
+  renderMonthlyViews_();
+  applyYearlyOverallValue_();
   try {
     let data = await loadMonthlyDataFromGas_();
     const currentMonth = getCurrentMonthLabel_();
@@ -1248,24 +1254,28 @@ async function loadMonthlyData_(options) {
       .filter(function(entry) {
         return entry && String(entry.month || '').trim() !== currentMonth;
       });
-    if (!months.length && backendMode === 'firebase') {
+    if (!months.length && backendMode === 'firebase' && !opts.forceGas) {
       data = await firebaseLoadMonthly_();
       months = (Array.isArray(data && data.months) ? data.months : [])
         .filter(function(entry) {
           return entry && String(entry.month || '').trim() !== currentMonth;
         });
     }
+    if (requestId !== monthlyLoadRequestId) return;
     monthlyState.months = months;
     if (!months.length) {
       monthlyState.selectedMonth = '';
     } else if (!months.some(function(entry) { return entry.month === monthlyState.selectedMonth; })) {
       monthlyState.selectedMonth = months[months.length - 1].month;
     }
+    monthlyState.loading = false;
     applyYearlyOverallValue_();
     renderMonthlyViews_();
   } catch (error) {
+    if (requestId !== monthlyLoadRequestId) return;
     monthlyState.months = [];
     monthlyState.selectedMonth = '';
+    monthlyState.loading = false;
     applyYearlyOverallValue_();
     renderMonthlyViews_();
     if (!opts.silent) {
@@ -1891,6 +1901,14 @@ function renderMonthlyViews_() {
   if (!monthlySwitch || !monthlySummaryGrid || !monthlySoldBody || !monthlyUnsoldBody || !monthlyChart) {
     return;
   }
+  if (monthlyState.loading) {
+    monthlySwitch.innerHTML = '<span class="monthly-empty">取得中・・・</span>';
+    monthlySummaryGrid.innerHTML = '';
+    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">取得中・・・</td></tr>';
+    monthlyUnsoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">取得中・・・</td></tr>';
+    monthlyChart.innerHTML = '<p class="monthly-empty">取得中・・・</p>';
+    return;
+  }
 
   const months = monthlyState.months;
   if (!months.length) {
@@ -2052,6 +2070,14 @@ function applySummary(summary, lastUpdated) {
 
 function applyYearlyOverallValue_(currentSummary) {
   if (!yearlyOverallValue) return;
+  if (monthlyState.loading) {
+    yearlyOverallValue.textContent = '取得中・・・';
+    yearlyOverallValue.style.color = '#5f6980';
+    if (yearlyOverallNote) {
+      yearlyOverallNote.textContent = '月別データ取得中・・・';
+    }
+    return;
+  }
   const prefix = String(YEARLY_SUMMARY_YEAR) + '-';
   const aggregate = monthlyState.months.reduce(function(acc, entry) {
     const month = String(entry && entry.month ? entry.month : '').trim();
