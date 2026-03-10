@@ -127,16 +127,12 @@
       }
       .sold-balance .sold-main .stat-balance-value { font-size: 12px; }
       .sold-balance .sold-transport .stat-balance-value { font-size: 12px; }
-      .sold-transport-wrap {
+      .sold-main-head {
         display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 4px;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
       }
-      .sold-transport-clear {
-        margin-right: 2px;
-      }
-      .sold-transport-wrap .sold-transport { width: 100%; }
 
       .view-tabs {
         display: grid;
@@ -536,15 +532,15 @@
             <div class="stat-label">販売済み利益</div>
             <div class="stat-balance sold-balance">
               <div class="stat-balance-item sold-main">
-                <div class="stat-balance-label">販売済み利益</div>
+                <div class="sold-main-head">
+                  <div class="stat-balance-label">販売済み利益</div>
+                  <button class="transport-clear-button" id="transportClearButton" type="button">削除</button>
+                </div>
                 <div class="stat-balance-value" id="soldProfitValue">¥0</div>
               </div>
-              <div class="sold-transport-wrap">
-                <button class="transport-clear-button sold-transport-clear" id="transportClearButton" type="button">削除</button>
-                <div class="stat-balance-item sold-transport">
-                  <div class="stat-balance-label">交通費</div>
-                  <div class="stat-balance-value" id="soldTransportValue">¥0</div>
-                </div>
+              <div class="stat-balance-item sold-transport">
+                <div class="stat-balance-label">交通費</div>
+                <div class="stat-balance-value" id="soldTransportValue">¥0</div>
               </div>
             </div>
             <div class="stat-note" id="soldProfitNote">0件 / 利益率 0.0%</div>
