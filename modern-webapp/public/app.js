@@ -2783,9 +2783,9 @@ function playAddButtonPeek_() {
   const layerRect = addPeekLayer.getBoundingClientRect();
   if (!isRectVisibleInViewport_(buttonRect) || buttonRect.width <= 0 || buttonRect.height <= 0) return;
 
-  const size = Math.round(44 + Math.random() * 20);
-  const x = buttonRect.left - layerRect.left + (buttonRect.width * (0.62 + Math.random() * 0.24));
-  const y = buttonRect.top - layerRect.top + (buttonRect.height * (0.88 + Math.random() * 0.06));
+  const size = Math.round(54 + Math.random() * 18);
+  const x = buttonRect.left - layerRect.left + (buttonRect.width * (0.44 + Math.random() * 0.12));
+  const y = buttonRect.top - layerRect.top + (buttonRect.height * (0.2 + Math.random() * 0.08));
 
   const sprite = document.createElement('img');
   sprite.className = 'add-peek-gif';
