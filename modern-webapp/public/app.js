@@ -526,14 +526,14 @@ function bindEvents() {
   });
 
   archiveButton.addEventListener('click', async function() {
-    if (!window.confirm('月別へアーカイブして、販売済みだけを別シートへ移します。未販売在庫はこのシートに残します。')) {
+    if (!window.confirm('月別へアーカイブして、販売済みだけを今日時点の前月データとして別シートへ移します。未販売在庫はこのシートに残します。')) {
       return;
     }
     await runApi(async function() {
       const data = await request('/api/archive', { method: 'POST' });
       render(data);
       await loadMonthlyData_({ silent: true, forceGas: true });
-      showToast('月別アーカイブが完了しました。');
+      showToast('月別アーカイブが完了しました。販売済みを今日時点の前月データとして保存しました。');
     });
   });
 
