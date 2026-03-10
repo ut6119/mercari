@@ -533,7 +533,7 @@ function bindEvents() {
       const data = await request('/api/archive', { method: 'POST' });
       render(data);
       await loadMonthlyData_({ silent: true, forceGas: true });
-      showToast('月別アーカイブが完了しました。販売済みを今日時点の前月データとして保存しました。');
+      showToast('月別アーカイブが完了しました。');
     });
   });
 
