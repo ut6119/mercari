@@ -2230,13 +2230,32 @@ function renderMonthlyViews_() {
   }) || months[0];
 
   const summary = selected.summary || {};
+  const soldCount = sanitizeAmount_(summary.soldCount);
+  const unsoldCount = sanitizeAmount_(summary.unsoldCount);
+  const totalCount = soldCount + unsoldCount;
   monthlySummaryGrid.innerHTML = [
-    ['販売済み利益', formatSignedYen(summary.soldProfit)],
-    ['未販利益', formatSignedYen(summary.unsoldProfit)],
-    ['合計収支', formatSignedYen(summary.overallNet)],
-    ['売上合計', formatYen(summary.soldRevenue)]
+    {
+      label: '販売済み利益',
+      value: formatSignedYen(summary.soldProfit),
+      note: soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin)
+    },
+    {
+      label: '未販利益',
+      value: formatSignedYen(summary.unsoldProfit),
+      note: unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin)
+    },
+    {
+      label: '合計収支',
+      value: formatSignedYen(summary.overallNet),
+      note: totalCount + '件 / 利益率 ' + formatPercent(summary.overallMargin)
+    },
+    {
+      label: '売上合計',
+      value: formatYen(summary.soldRevenue),
+      note: soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin)
+    }
   ].map(function(metric) {
-    return '<div class="monthly-metric"><div class="monthly-metric-label">' + metric[0] + '</div><div class="monthly-metric-value">' + metric[1] + '</div></div>';
+    return '<div class="monthly-metric"><div class="monthly-metric-label">' + metric.label + '</div><div class="monthly-metric-value">' + metric.value + '</div><div class="monthly-metric-note">' + metric.note + '</div></div>';
   }).join('');
 
   const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
@@ -2278,7 +2297,7 @@ function renderMonthlyChart_() {
       + '    <div class="chart-bar-track"><div class="chart-bar revenue" style="width:' + revenueWidth + '%;"></div></div>'
       + '    <div class="chart-bar-track"><div class="' + profitClass + '" style="width:' + profitWidth + '%;"></div></div>'
       + '  </div>'
-      + '  <div class="chart-values">売上 ' + formatYen(soldRevenue) + ' / 利益 ' + formatSignedYen(soldProfit) + '</div>'
+      + '  <div class="chart-values">利益 ' + formatSignedYen(soldProfit) + ' / 利益率 ' + formatPercent(summary.soldMargin) + '</div>'
       + '</div>';
   }).join('');
 }
