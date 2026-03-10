@@ -103,6 +103,7 @@
       .stat-label { font-size: 12px; color: var(--muted); }
       .stat-value { margin-top: 6px; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; letter-spacing: -0.05em; }
       .stat-note { margin-top: 4px; font-size: 12px; color: var(--muted); }
+      .stat-formula { margin-top: 2px; font-size: 11px; color: #5f6980; }
 
       .view-tabs {
         display: grid;
@@ -483,6 +484,7 @@
             <div class="stat-label">販売前後の合計収支</div>
             <div class="stat-value" id="overallNetValue">¥0</div>
             <div class="stat-note" id="overallNetNote">合計利益率 0.0%</div>
+            <div class="stat-note stat-formula">式: 販売済み利益 + 未販利益</div>
           </div>
           <div class="stat">
             <div class="stat-label">売上合計</div>
