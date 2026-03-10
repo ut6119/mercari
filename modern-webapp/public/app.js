@@ -66,6 +66,10 @@ const selectionMode = {
   sold: false,
   unsold: false
 };
+const pendingBottomByStatus = {
+  sold: [],
+  unsold: []
+};
 const historyPast = [];
 const historyFuture = [];
 const HISTORY_LIMIT = 40;
@@ -206,6 +210,9 @@ function bindEvents() {
         body: JSON.stringify(payload)
       });
       const addedItemId = findAddedItemId_(currentData, data, payload.status, payload.name);
+      if (addedItemId) {
+        markItemsToBottom_(payload.status, [addedItemId]);
+      }
       quickAddForm.reset();
       shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
@@ -354,6 +361,12 @@ async function handleBulkAction(status, event) {
           body: JSON.stringify(payload)
         });
       }
+    }
+
+    if (action === 'to-sold') {
+      markItemsToBottom_('sold', selectedIds);
+    } else if (action === 'to-unsold') {
+      markItemsToBottom_('unsold', selectedIds);
     }
 
     render(latestData || await request('/api/dashboard'));
@@ -1159,15 +1172,19 @@ function render(data, options) {
   }
 
   currentData = data;
+  const soldItems = reorderItemsForBottom_((data && data.soldItems) || [], 'sold');
+  const unsoldItems = reorderItemsForBottom_((data && data.unsoldItems) || [], 'unsold');
+  currentData.soldItems = soldItems;
+  currentData.unsoldItems = unsoldItems;
   const summary = data.summary;
   applySummary(summary, data.lastUpdated);
 
-  soldTableBody.innerHTML = data.soldItems.length
-    ? data.soldItems.map(renderSoldRow).join('')
+  soldTableBody.innerHTML = soldItems.length
+    ? soldItems.map(renderSoldRow).join('')
     : '<tr class="table-empty"><td colspan="7">販売済み商品はまだありません。</td></tr>';
 
-  unsoldTableBody.innerHTML = data.unsoldItems.length
-    ? data.unsoldItems.map(renderUnsoldRow).join('')
+  unsoldTableBody.innerHTML = unsoldItems.length
+    ? unsoldItems.map(renderUnsoldRow).join('')
     : '<tr class="table-empty"><td colspan="7">未販売在庫はまだありません。</td></tr>';
 
   setSelectionMode('sold', selectionMode.sold);
@@ -1568,6 +1585,40 @@ function scrollToMovedRowsAndAnimate_(itemIds, status, intensity, fallbackAnchor
   setTimeout(function() {
     playCategoryBurst_(status, intensity, targetRow);
   }, 650);
+}
+
+function markItemsToBottom_(status, itemIds) {
+  const normalizedStatus = normalizeStatusValue_(status);
+  if (!normalizedStatus) return;
+  const ids = Array.isArray(itemIds)
+    ? itemIds.map(function(id) { return String(id || '').trim(); }).filter(Boolean)
+    : [];
+  if (!ids.length) return;
+  const existing = pendingBottomByStatus[normalizedStatus] || [];
+  const merged = existing.concat(ids);
+  pendingBottomByStatus[normalizedStatus] = Array.from(new Set(merged));
+}
+
+function reorderItemsForBottom_(items, status) {
+  const normalizedStatus = normalizeStatusValue_(status);
+  const list = Array.isArray(items) ? items.slice() : [];
+  if (!normalizedStatus) return list;
+  const pendingIds = pendingBottomByStatus[normalizedStatus] || [];
+  if (!pendingIds.length) return list;
+
+  const pendingSet = new Set(pendingIds);
+  const normal = [];
+  const bottom = [];
+  list.forEach(function(item) {
+    const id = String(item && item.id || '').trim();
+    if (id && pendingSet.has(id)) {
+      bottom.push(item);
+    } else {
+      normal.push(item);
+    }
+  });
+  pendingBottomByStatus[normalizedStatus] = [];
+  return normal.concat(bottom);
 }
 
 function findItemRowById_(itemId, status) {
