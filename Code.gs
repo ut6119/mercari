@@ -9,11 +9,13 @@ const META_STATUS_COLUMN = 10;
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
 const MIN_SHEET_ROWS = 20;
+const API_WRITE_TOKEN_PROPERTY = 'MERCARI_API_WRITE_TOKEN';
 
 function doGet(e) {
   if (isApiRequest_(e)) {
     try {
       const payload = parseApiGetPayload_(e);
+      enforceApiWriteAccess_(payload, e);
       const result = runApiAction_(payload);
       const callback = String((e && e.parameter && (e.parameter.cb || e.parameter.callback)) || '').trim();
       return jsonOutput_(result, callback);
@@ -38,6 +40,7 @@ function doGet(e) {
 function doPost(e) {
   try {
     const payload = parseApiPayload_(e);
+    enforceApiWriteAccess_(payload, e);
     const result = runApiAction_(payload);
     return jsonOutput_(result);
   } catch (error) {
@@ -699,6 +702,35 @@ function isUnsoldSectionLabel_(value) {
 
 function isApiDashboardRequest_(e) {
   return isApiRequest_(e);
+}
+
+function isReadOnlyApiAction_(action) {
+  return action === 'dashboard' || action === 'monthly';
+}
+
+function enforceApiWriteAccess_(payload, e) {
+  const action = String((payload && payload.action) || '').trim().toLowerCase();
+  if (!action || isReadOnlyApiAction_(action)) {
+    return;
+  }
+
+  const expectedToken = String(
+    PropertiesService.getScriptProperties().getProperty(API_WRITE_TOKEN_PROPERTY) || ''
+  ).trim();
+  const payloadToken = payload
+    ? String(payload.token || payload.apiToken || '').trim()
+    : '';
+  const queryToken = e && e.parameter
+    ? String(e.parameter.token || e.parameter.apiToken || '').trim()
+    : '';
+  const token = payloadToken || queryToken;
+
+  if (!expectedToken) {
+    throw new Error('Write API is disabled.');
+  }
+  if (token !== expectedToken) {
+    throw new Error('Write API token is invalid.');
+  }
 }
 
 function isApiRequest_(e) {

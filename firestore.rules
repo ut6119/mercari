@@ -2,10 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /mercari_items/{doc} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
     match /mercari_archives/{doc=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

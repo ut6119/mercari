@@ -7,6 +7,9 @@ const autoSaveState = {};
 const LOCAL_API_ORIGIN = 'http://localhost:3000';
 const GAS_API_ENDPOINT = (window.APP_CONFIG && window.APP_CONFIG.gasEndpoint)
   || 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec';
+const API_WRITE_TOKEN = (window.APP_CONFIG && window.APP_CONFIG.apiWriteToken)
+  ? String(window.APP_CONFIG.apiWriteToken).trim()
+  : '';
 const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
@@ -131,7 +134,7 @@ async function initializeBackend() {
   }
 
   const config = FIREBASE_OPTIONS.config || {};
-  if (!config.projectId || !config.apiKey || !config.appId) {
+  if (!config.projectId || !config.apiKey || !config.appId || isPlaceholderValue_(config.apiKey)) {
     backendMode = 'gas';
     showToast('Firebase設定が不完全のためGASモードで動作します。');
     return;
@@ -143,6 +146,12 @@ async function initializeBackend() {
   firebaseDb = window.firebase.firestore(app);
   firebaseItemsCollection = firebaseDb.collection(FIREBASE_COLLECTION);
   backendMode = 'firebase';
+}
+
+function isPlaceholderValue_(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (!text) return true;
+  return text.includes('replace_with') || text.includes('your_') || text.includes('xxxxx');
 }
 
 function bindEvents() {
@@ -645,6 +654,8 @@ async function reloadData(message) {
 }
 
 async function request(url, options) {
+  const method = String((options && options.method) || 'GET').toUpperCase();
+
   if (backendMode === 'firebase') {
     return firebaseRequest(url, options);
   }
@@ -659,6 +670,10 @@ async function request(url, options) {
       throw new Error(data.error || '通信に失敗しました。');
     }
     return data;
+  }
+
+  if (method !== 'GET' && !API_WRITE_TOKEN) {
+    throw new Error('書き込みは停止中です。管理者がAPIトークンを設定してください。');
   }
 
   const params = convertRequestToGasParams_(url, options);
@@ -757,6 +772,9 @@ function convertRequestToGasParams_(url, options) {
     throw new Error('未対応のAPI呼び出しです。');
   }
 
+  if (method !== 'GET' && API_WRITE_TOKEN) {
+    params.set('token', API_WRITE_TOKEN);
+  }
   params.set('_ts', String(Date.now()));
   return params;
 }
