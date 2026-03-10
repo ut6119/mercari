@@ -1837,13 +1837,15 @@ function playCategoryBurst_(status, intensity, anchorEl) {
     centerX = rect.left + rect.width * 0.5;
     centerY = rect.top + Math.min(82, Math.max(42, rect.height * 0.2));
   }
-  const count = Math.max(4, Math.min(10, Number(intensity) || 8));
+  const rawIntensity = Number(intensity) || 8;
+  const count = Math.max(2, Math.min(6, Math.round(rawIntensity * 0.5)));
 
   for (let i = 0; i < count; i += 1) {
     const angle = ((Math.PI * 2) / count) * i + ((Math.random() - 0.5) * 0.5);
-    const distance = 72 + Math.random() * 120;
-    const dx = Math.cos(angle) * distance;
-    const dy = Math.sin(angle) * distance + ((Math.random() - 0.5) * 26);
+    const horizontalDistance = 120 + Math.random() * 170;
+    const verticalDistance = 52 + Math.random() * 70;
+    const dx = Math.cos(angle) * horizontalDistance;
+    const dy = Math.sin(angle) * verticalDistance + ((Math.random() - 0.5) * 18);
     const size = Math.round(18 + Math.random() * 52);
     const fromScale = (0.45 + Math.random() * 0.7).toFixed(2);
     const toScale = (0.12 + Math.random() * 0.34).toFixed(2);
