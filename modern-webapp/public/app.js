@@ -15,6 +15,11 @@ const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
 const FIREBASE_ARCHIVE_COLLECTION = FIREBASE_OPTIONS.archiveCollection || 'mercari_archives';
+const FIREBASE_SDK_VERSION = '10.12.5';
+const FIREBASE_APP_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-app-compat.js';
+const FIREBASE_FIRESTORE_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-firestore-compat.js';
+const FIREBASE_AUTH_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-auth-compat.js';
+const FIREBASE_APPCHECK_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-app-check-compat.js';
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
 
@@ -91,13 +96,13 @@ init().catch(function(error) {
 
 async function init() {
   setupHeroMascot_();
+  await ensureFirebaseSdk_();
   await initializeAuth_();
   await initializeBackend();
   bindEvents();
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
   await reloadData('最新状態を読み込みました。');
-  await loadMonthlyData_();
 }
 
 function setupHeroMascot_() {
@@ -113,6 +118,55 @@ function setupHeroMascot_() {
   heroMascot.onerror = function() {
     heroMascot.style.display = 'none';
   };
+}
+
+async function ensureFirebaseSdk_() {
+  const needsAuth = REQUIRE_LOGIN;
+  const needsFirestore = Boolean(FIREBASE_OPTIONS.enabled);
+  const needsAppCheck = Boolean(needsFirestore && FIREBASE_OPTIONS.appCheck && FIREBASE_OPTIONS.appCheck.enabled);
+  if (!needsAuth && !needsFirestore && !needsAppCheck) {
+    return;
+  }
+  if (window.firebase) {
+    return;
+  }
+  await loadScriptOnce_(FIREBASE_APP_SDK_URL);
+  if (needsFirestore) {
+    await loadScriptOnce_(FIREBASE_FIRESTORE_SDK_URL);
+  }
+  if (needsAuth) {
+    await loadScriptOnce_(FIREBASE_AUTH_SDK_URL);
+  }
+  if (needsAppCheck) {
+    await loadScriptOnce_(FIREBASE_APPCHECK_SDK_URL);
+  }
+}
+
+function loadScriptOnce_(src) {
+  return new Promise(function(resolve, reject) {
+    const existing = document.querySelector('script[src="' + src + '"]');
+    if (existing) {
+      if (existing.dataset && existing.dataset.loaded === 'true') {
+        resolve();
+        return;
+      }
+      existing.addEventListener('load', function() { resolve(); }, { once: true });
+      existing.addEventListener('error', function() { reject(new Error('SDK読み込み失敗: ' + src)); }, { once: true });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = src;
+    script.async = true;
+    script.addEventListener('load', function() {
+      if (script.dataset) script.dataset.loaded = 'true';
+      resolve();
+    }, { once: true });
+    script.addEventListener('error', function() {
+      reject(new Error('SDK読み込み失敗: ' + src));
+    }, { once: true });
+    document.head.appendChild(script);
+  });
 }
 
 function activateView_(viewName) {
