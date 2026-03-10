@@ -22,6 +22,7 @@ const FIREBASE_AUTH_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_S
 const FIREBASE_APPCHECK_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-app-check-compat.js';
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
+const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
 
 let backendMode = 'gas';
 let firebaseDb = null;
@@ -102,7 +103,13 @@ async function init() {
   bindEvents();
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
-  await reloadData('最新状態を読み込みました。');
+  const cachedDashboard = loadCachedDashboard_();
+  if (cachedDashboard) {
+    render(cachedDashboard, { skipHistory: true });
+    void refreshDashboardInBackground_();
+  } else {
+    await reloadData('最新状態を読み込みました。');
+  }
 }
 
 function setupHeroMascot_() {
@@ -841,6 +848,23 @@ async function reloadData(message) {
   });
 }
 
+async function refreshDashboardInBackground_() {
+  try {
+    const data = await request('/api/dashboard');
+    const active = document.activeElement;
+    const editingNow = Boolean(
+      active &&
+      (active.matches('[data-field]') || active.matches('#nameInput, #revenueInput, #costInput, #shippingInput'))
+    );
+    if (editingNow || pending) {
+      return;
+    }
+    render(data, { skipHistory: true });
+  } catch (_error) {
+    // Keep showing cached data when background refresh fails.
+  }
+}
+
 async function request(url, options) {
   const method = String((options && options.method) || 'GET').toUpperCase();
   if (method !== 'GET' && REQUIRE_LOGIN && !signedInIdToken && backendMode !== 'local') {
@@ -1390,6 +1414,7 @@ function render(data, options) {
   const unsoldItems = reorderItemsForBottom_((data && data.unsoldItems) || [], 'unsold');
   currentData.soldItems = soldItems;
   currentData.unsoldItems = unsoldItems;
+  saveDashboardCache_(currentData);
   const summary = data.summary;
   applySummary(summary, data.lastUpdated);
 
@@ -1404,6 +1429,28 @@ function render(data, options) {
   setSelectionMode('sold', selectionMode.sold);
   setSelectionMode('unsold', selectionMode.unsold);
   updateHistoryButtons_();
+}
+
+function loadCachedDashboard_() {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !parsed.summary) return null;
+    if (!Array.isArray(parsed.soldItems) || !Array.isArray(parsed.unsoldItems)) return null;
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveDashboardCache_(data) {
+  try {
+    if (!data || typeof data !== 'object' || !data.summary) return;
+    localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(data));
+  } catch (_error) {
+    // Ignore storage errors.
+  }
 }
 
 function renderMonthlyViews_() {
