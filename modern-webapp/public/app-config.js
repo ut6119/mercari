@@ -14,6 +14,11 @@ window.APP_RUNTIME_CONFIG = {
       authDomain: 'mercari-9bbd3.firebaseapp.com',
       projectId: 'mercari-9bbd3',
       appId: '1:589698327361:web:bc5c88e990afd124bf37c0'
+    },
+    appCheck: {
+      enabled: true,
+      siteKey: '6LcneYUsAAAAAEHJc5Fg9fNWxkeyZejEv_awMQwB',
+      debugToken: ''
     }
   }
 };
