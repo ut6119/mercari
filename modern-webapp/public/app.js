@@ -403,7 +403,10 @@ function bindEvents() {
   }
   if (transportClearButton) {
     transportClearButton.addEventListener('click', function() {
-      applyTransportPreset_('');
+      void runApi(async function() {
+        applyTransportPreset_('');
+        await clearSoldTransport_();
+      });
     });
   }
   applyTransportPreset_(selectedTransportPreset);
@@ -953,6 +956,40 @@ function applyTransportPreset_(preset, options) {
 function getQuickAddTransportAmount_() {
   if (!transportInput) return 0;
   return sanitizeAmount_(transportInput.value);
+}
+
+async function clearSoldTransport_() {
+  const soldItems = Array.isArray(currentData && currentData.soldItems)
+    ? currentData.soldItems
+    : [];
+  const targets = soldItems.filter(function(item) {
+    return sanitizeAmount_(item.transport) > 0;
+  });
+
+  if (!targets.length) {
+    recalcSummaryFromDom();
+    showToast('交通費はすでに0円です。');
+    return;
+  }
+
+  let latestData = null;
+  for (const item of targets) {
+    latestData = await request('/api/items', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: item.id,
+        status: 'sold',
+        name: String(item.name || ''),
+        revenue: sanitizeAmount_(item.revenue),
+        shipping: sanitizeAmount_(item.shipping, DEFAULT_SHIPPING),
+        cost: sanitizeAmount_(item.cost),
+        transport: 0
+      })
+    });
+  }
+
+  render(latestData || await request('/api/dashboard'));
+  showToast('交通費をクリアしました。');
 }
 
 async function request(url, options) {
