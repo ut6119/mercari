@@ -97,15 +97,17 @@ init().catch(function(error) {
 
 async function init() {
   setupHeroMascot_();
+  const cachedDashboard = loadCachedDashboard_();
+  if (cachedDashboard) {
+    render(cachedDashboard, { skipHistory: true });
+  }
   await ensureFirebaseSdk_();
   await initializeAuth_();
   await initializeBackend();
   bindEvents();
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
-  const cachedDashboard = loadCachedDashboard_();
   if (cachedDashboard) {
-    render(cachedDashboard, { skipHistory: true });
     void refreshDashboardInBackground_();
   } else {
     await reloadData('最新状態を読み込みました。');
@@ -216,8 +218,24 @@ async function initializeBackend() {
     return;
   }
   firebaseDb = window.firebase.firestore(app);
+  void enableFirestorePersistence_(firebaseDb);
   firebaseItemsCollection = firebaseDb.collection(FIREBASE_COLLECTION);
   backendMode = 'firebase';
+}
+
+async function enableFirestorePersistence_(db) {
+  if (!db || typeof db.enablePersistence !== 'function') {
+    return;
+  }
+  try {
+    await db.enablePersistence({ synchronizeTabs: true });
+  } catch (error) {
+    // Persistence can fail on private browsing or when multiple tabs race.
+    const code = error && error.code ? String(error.code) : '';
+    if (code !== 'failed-precondition' && code !== 'unimplemented') {
+      console.warn('Firestore persistence unavailable:', error);
+    }
+  }
 }
 
 function getOrCreateFirebaseApp_(config) {
