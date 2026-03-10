@@ -61,6 +61,7 @@ const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
 const transportSwitch = document.getElementById('transportSwitch');
 const transportInput = document.getElementById('transportInput');
+const transportClearButton = document.getElementById('transportClearButton');
 const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
 const homeView = document.getElementById('homeView');
 const monthlyView = document.getElementById('monthlyView');
@@ -398,6 +399,11 @@ function bindEvents() {
       if (preset === 'other' && transportInput) {
         transportInput.focus();
       }
+    });
+  }
+  if (transportClearButton) {
+    transportClearButton.addEventListener('click', function() {
+      applyTransportPreset_('');
     });
   }
   applyTransportPreset_(selectedTransportPreset);

@@ -294,6 +294,23 @@
         gap: 8px;
         margin-bottom: 8px;
       }
+      .transport-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+      .transport-row label { margin-bottom: 0; }
+      .transport-clear-button {
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid #d8dfeb;
+        background: #f5f7fc;
+        color: #4d5a73;
+        font-size: 11px;
+        font-weight: 700;
+      }
       .transport-button {
         padding: 7px 12px;
         border-radius: 999px;
@@ -664,7 +681,10 @@
                 <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
               </div>
               <div class="field">
-                <label for="transportInput">交通費</label>
+                <div class="transport-row">
+                  <label for="transportInput">交通費</label>
+                  <button class="transport-clear-button" id="transportClearButton" type="button">削除</button>
+                </div>
                 <div class="transport-switch" id="transportSwitch">
                   <button class="transport-button" type="button" data-transport-preset="tennoji">天王寺</button>
                   <button class="transport-button" type="button" data-transport-preset="namba">難波</button>
