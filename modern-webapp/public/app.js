@@ -987,20 +987,15 @@ async function request(url, options) {
 async function loadMonthlyData_(options) {
   const opts = options || {};
   try {
-    let data;
-    if (backendMode === 'firebase') {
-      data = await firebaseLoadMonthly_();
-    } else {
-      data = await loadMonthlyDataFromGas_();
-    }
+    let data = await loadMonthlyDataFromGas_();
     const currentMonth = getCurrentMonthLabel_();
     let months = (Array.isArray(data && data.months) ? data.months : [])
       .filter(function(entry) {
         return entry && String(entry.month || '').trim() !== currentMonth;
       });
-    if (backendMode === 'firebase' && months.length === 0) {
-      const gasData = await loadMonthlyDataFromGas_();
-      months = (Array.isArray(gasData && gasData.months) ? gasData.months : [])
+    if (!months.length && backendMode === 'firebase') {
+      data = await firebaseLoadMonthly_();
+      months = (Array.isArray(data && data.months) ? data.months : [])
         .filter(function(entry) {
           return entry && String(entry.month || '').trim() !== currentMonth;
         });
