@@ -26,6 +26,9 @@ const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
 const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
 const ENABLE_GIF_EFFECTS = false;
+const ENABLE_ADD_BUTTON_PEEK = true;
+const ADD_BUTTON_PEEK_MIN_MS = 4500;
+const ADD_BUTTON_PEEK_MAX_MS = 12000;
 
 let backendMode = 'gas';
 let firebaseDb = null;
@@ -99,6 +102,7 @@ const archiveButton = document.getElementById('archiveButton');
 const addButton = document.getElementById('addButton');
 const toast = document.getElementById('toast');
 const heroMascot = document.getElementById('heroMascot');
+const addPeekLayer = document.getElementById('addPeekLayer');
 const burstLayer = document.getElementById('burstLayer');
 const authStatus = document.getElementById('authStatus');
 const authLoginButton = document.getElementById('authLoginButton');
@@ -134,6 +138,8 @@ const selectedTransportLedgerIds = new Set();
 const transportHistoryPast = [];
 const transportHistoryFuture = [];
 const TRANSPORT_HISTORY_LIMIT = 40;
+let addButtonPeekTimer = null;
+let addButtonPeekInitialized = false;
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -149,6 +155,7 @@ async function init() {
   await initializeAuth_();
   await initializeBackend();
   bindEvents();
+  startAddButtonPeek_();
   renderTransportLedger_();
   setDefaultTransportDate_();
   applyTransportLedgerPreset_('');
@@ -2728,6 +2735,72 @@ function resolveBurstGifUrl_() {
     ? String(window.APP_CONFIG.heroGifUrl).trim()
     : '';
   return configuredUrl || '';
+}
+
+function startAddButtonPeek_() {
+  if (addButtonPeekInitialized) return;
+  addButtonPeekInitialized = true;
+  if (!ENABLE_ADD_BUTTON_PEEK || !openQuickAddButton || !addPeekLayer) return;
+
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+      clearAddButtonPeekTimer_();
+      return;
+    }
+    scheduleAddButtonPeek_();
+  });
+  scheduleAddButtonPeek_();
+}
+
+function clearAddButtonPeekTimer_() {
+  if (!addButtonPeekTimer) return;
+  clearTimeout(addButtonPeekTimer);
+  addButtonPeekTimer = null;
+}
+
+function scheduleAddButtonPeek_() {
+  if (!ENABLE_ADD_BUTTON_PEEK || !openQuickAddButton || !addPeekLayer) return;
+  if (document.hidden) return;
+  clearAddButtonPeekTimer_();
+  const min = Math.max(1000, ADD_BUTTON_PEEK_MIN_MS);
+  const max = Math.max(min, ADD_BUTTON_PEEK_MAX_MS);
+  const delay = min + Math.floor(Math.random() * (max - min + 1));
+  addButtonPeekTimer = setTimeout(function() {
+    playAddButtonPeek_();
+    scheduleAddButtonPeek_();
+  }, delay);
+}
+
+function playAddButtonPeek_() {
+  if (!ENABLE_ADD_BUTTON_PEEK || !openQuickAddButton || !addPeekLayer) return;
+  if (quickAddModal && quickAddModal.classList.contains('open')) return;
+  if (addPeekLayer.childElementCount > 1) return;
+
+  const gifUrl = resolveBurstGifUrl_();
+  if (!gifUrl) return;
+
+  const buttonRect = openQuickAddButton.getBoundingClientRect();
+  const layerRect = addPeekLayer.getBoundingClientRect();
+  if (!isRectVisibleInViewport_(buttonRect) || buttonRect.width <= 0 || buttonRect.height <= 0) return;
+
+  const size = Math.round(44 + Math.random() * 20);
+  const x = buttonRect.left - layerRect.left + (buttonRect.width * (0.62 + Math.random() * 0.24));
+  const y = buttonRect.top - layerRect.top + (buttonRect.height * (0.88 + Math.random() * 0.06));
+
+  const sprite = document.createElement('img');
+  sprite.className = 'add-peek-gif';
+  sprite.src = gifUrl;
+  sprite.alt = '';
+  sprite.decoding = 'async';
+  sprite.loading = 'eager';
+  sprite.style.left = x.toFixed(1) + 'px';
+  sprite.style.top = y.toFixed(1) + 'px';
+  sprite.style.setProperty('--size', size + 'px');
+  sprite.style.animationDuration = (1300 + Math.round(Math.random() * 700)) + 'ms';
+  sprite.addEventListener('animationend', function() {
+    sprite.remove();
+  }, { once: true });
+  addPeekLayer.appendChild(sprite);
 }
 
 function sanitizeAmount_(value, emptyDefault) {
