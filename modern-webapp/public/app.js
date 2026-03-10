@@ -61,6 +61,7 @@ const archiveButton = document.getElementById('archiveButton');
 const addButton = document.getElementById('addButton');
 const toast = document.getElementById('toast');
 const heroMascot = document.getElementById('heroMascot');
+const burstLayer = document.getElementById('burstLayer');
 const selectionMode = {
   sold: false,
   unsold: false
@@ -208,6 +209,7 @@ function bindEvents() {
       shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
+      playCategoryBurst_(payload.status, 10);
       showToast('商品を追加しました。');
     });
   });
@@ -359,8 +361,14 @@ async function handleBulkAction(status, event) {
     setSelectionMode('sold', false);
     setSelectionMode('unsold', false);
 
-    if (action === 'to-sold') showToast('選択行を販売済みに移動しました。');
-    if (action === 'to-unsold') showToast('選択行を未販売在庫へ移動しました。');
+    if (action === 'to-sold') {
+      playCategoryBurst_('sold', Math.min(18, Math.max(8, selectedIds.length + 4)));
+      showToast('選択行を販売済みに移動しました。');
+    }
+    if (action === 'to-unsold') {
+      playCategoryBurst_('unsold', Math.min(18, Math.max(8, selectedIds.length + 4)));
+      showToast('選択行を未販売在庫へ移動しました。');
+    }
     if (action === 'delete') showToast('選択行を削除しました。');
   });
 }
@@ -1408,6 +1416,68 @@ function updateRowPreview(row, status) {
   if (margin !== null && margin >= 0.2) row.classList.add('row-sold-good');
   else if (margin !== null && margin < 0) row.classList.add('row-sold-bad');
   else row.classList.add('row-unsold');
+}
+
+function playCategoryBurst_(status, intensity) {
+  if (!burstLayer) return;
+  const gifUrl = resolveBurstGifUrl_();
+  if (!gifUrl) return;
+
+  const targetPanel = status === 'sold' ? soldPanel : unsoldPanel;
+  if (!targetPanel) return;
+  const rect = targetPanel.getBoundingClientRect();
+  if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+  const centerX = rect.left + rect.width * 0.5;
+  const centerY = rect.top + Math.min(82, Math.max(42, rect.height * 0.2));
+  const count = Math.max(6, Math.min(18, Number(intensity) || 10));
+
+  for (let i = 0; i < count; i += 1) {
+    const angle = ((Math.PI * 2) / count) * i + ((Math.random() - 0.5) * 0.5);
+    const distance = 72 + Math.random() * 120;
+    const dx = Math.cos(angle) * distance;
+    const dy = Math.sin(angle) * distance - (44 + Math.random() * 54);
+    const size = Math.round(18 + Math.random() * 52);
+    const fromScale = (0.45 + Math.random() * 0.7).toFixed(2);
+    const toScale = (0.12 + Math.random() * 0.34).toFixed(2);
+    const fromRotate = Math.round((Math.random() * 90) - 45);
+    const rotateDir = Math.random() < 0.5 ? -1 : 1;
+    const toRotate = fromRotate + rotateDir * Math.round(120 + Math.random() * 220);
+
+    const sprite = document.createElement('img');
+    sprite.className = 'burst-gif';
+    sprite.src = gifUrl;
+    sprite.alt = '';
+    sprite.decoding = 'async';
+    sprite.loading = 'eager';
+    sprite.style.left = centerX.toFixed(1) + 'px';
+    sprite.style.top = centerY.toFixed(1) + 'px';
+    sprite.style.setProperty('--size', size + 'px');
+    sprite.style.setProperty('--dx', dx.toFixed(1) + 'px');
+    sprite.style.setProperty('--dy', dy.toFixed(1) + 'px');
+    sprite.style.setProperty('--from-scale', fromScale);
+    sprite.style.setProperty('--to-scale', toScale);
+    sprite.style.setProperty('--from-rotate', fromRotate + 'deg');
+    sprite.style.setProperty('--to-rotate', toRotate + 'deg');
+    sprite.style.animationDuration = Math.round(560 + Math.random() * 260) + 'ms';
+    sprite.addEventListener('animationend', function() {
+      sprite.remove();
+    }, { once: true });
+    burstLayer.appendChild(sprite);
+  }
+}
+
+function resolveBurstGifUrl_() {
+  const mascotSrc = heroMascot
+    ? String(heroMascot.currentSrc || heroMascot.src || '').trim()
+    : '';
+  if (mascotSrc && heroMascot.style.display !== 'none') {
+    return mascotSrc;
+  }
+  const configuredUrl = window.APP_CONFIG && window.APP_CONFIG.heroGifUrl
+    ? String(window.APP_CONFIG.heroGifUrl).trim()
+    : '';
+  return configuredUrl || '';
 }
 
 function sanitizeAmount_(value, emptyDefault) {
