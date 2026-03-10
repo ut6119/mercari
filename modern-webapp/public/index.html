@@ -51,9 +51,9 @@
       }
       .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
       .hero-actions {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
+        margin-top: 8px;
+        display: flex;
+        justify-content: flex-end;
       }
       .hero-add-button {
         padding: 9px 14px;
@@ -535,7 +535,7 @@
         .hero, .panel { padding: 16px; }
         .hero-mascot { width: 48px; top: 6px; right: 6px; }
         .hero-top { flex-direction: row; align-items: center; }
-        .hero-actions { margin-right: 44px; }
+        .hero-actions { margin-right: 44px; justify-content: flex-start; }
         .hero-note { max-width: calc(100% - 58px); }
         .view-tab { font-size: 12px; padding: 9px 6px; }
         .field-row { grid-template-columns: 1fr; }
@@ -558,11 +558,11 @@
         <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
         <div class="hero-top">
           <h1 class="title">メルカリ収支アプリ</h1>
-          <div class="hero-actions">
-            <button class="button button-primary hero-add-button" id="openQuickAddButton" type="button">商品追加</button>
-          </div>
         </div>
         <div class="hero-note">ホーム・月別・棒グラフを切替できます。</div>
+        <div class="hero-actions">
+          <button class="button button-primary hero-add-button" id="openQuickAddButton" type="button">商品追加</button>
+        </div>
         <div class="auth-row">
           <span id="authStatus" class="auth-status">認証: 確認中</span>
           <button class="button button-secondary auth-button" id="authLoginButton" type="button">Googleログイン</button>
