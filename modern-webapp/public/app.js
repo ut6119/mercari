@@ -25,6 +25,7 @@ const APP_TIMEZONE = 'Asia/Tokyo';
 const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
 const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
+const ENABLE_GIF_EFFECTS = false;
 
 let backendMode = 'gas';
 let firebaseDb = null;
@@ -154,6 +155,10 @@ async function init() {
 
 function setupHeroMascot_() {
   if (!heroMascot) return;
+  if (!ENABLE_GIF_EFFECTS) {
+    heroMascot.style.display = 'none';
+    return;
+  }
   const configuredUrl = window.APP_CONFIG && window.APP_CONFIG.heroGifUrl
     ? String(window.APP_CONFIG.heroGifUrl).trim()
     : '';
@@ -2282,6 +2287,7 @@ function updateRowPreview(row, status) {
 }
 
 function playCategoryBurst_(status, intensity, anchorEl) {
+  if (!ENABLE_GIF_EFFECTS) return;
   if (!burstLayer) return;
   if (burstLayer.childElementCount > 14) return;
   const gifUrl = resolveBurstGifUrl_();
