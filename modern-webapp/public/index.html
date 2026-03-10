@@ -104,6 +104,20 @@
       .stat-value { margin-top: 6px; font-size: clamp(20px, 2.2vw, 30px); font-weight: 800; letter-spacing: -0.05em; }
       .stat-note { margin-top: 4px; font-size: 12px; color: var(--muted); }
       .stat-formula { margin-top: 2px; font-size: 11px; color: #5f6980; }
+      .stat-balance {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .stat-balance-item {
+        border: 1px solid #d7e2f4;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.88);
+        padding: 6px 8px;
+      }
+      .stat-balance-label { font-size: 10px; color: #5f6980; }
+      .stat-balance-value { margin-top: 2px; font-size: 14px; font-weight: 700; }
 
       .view-tabs {
         display: grid;
@@ -464,6 +478,7 @@
         .view-tab { font-size: 12px; padding: 9px 6px; }
         .field-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+        .stat-balance { grid-template-columns: 1fr; }
         .monthly-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .chart-row { grid-template-columns: 56px 1fr; }
         .chart-values { grid-column: 1 / -1; text-align: left; min-width: 0; }
@@ -493,6 +508,16 @@
           <div class="stat">
             <div class="stat-label">販売済み利益</div>
             <div class="stat-value" id="soldProfitValue">¥0</div>
+            <div class="stat-balance">
+              <div class="stat-balance-item">
+                <div class="stat-balance-label">商品利益</div>
+                <div class="stat-balance-value" id="soldProfitGrossValue">¥0</div>
+              </div>
+              <div class="stat-balance-item">
+                <div class="stat-balance-label">交通費</div>
+                <div class="stat-balance-value" id="soldTransportValue">¥0</div>
+              </div>
+            </div>
             <div class="stat-note" id="soldProfitNote">0件 / 利益率 0.0%</div>
           </div>
           <div class="stat">
@@ -634,13 +659,13 @@
               <div class="field">
                 <label for="transportInput">交通費</label>
                 <div class="transport-switch" id="transportSwitch">
-                  <button class="transport-button active" type="button" data-transport-preset="tennoji">天王寺 580</button>
-                  <button class="transport-button" type="button" data-transport-preset="namba">なんば 580</button>
-                  <button class="transport-button" type="button" data-transport-preset="umeda">梅田 680</button>
+                  <button class="transport-button" type="button" data-transport-preset="tennoji">天王寺</button>
+                  <button class="transport-button" type="button" data-transport-preset="namba">難波</button>
+                  <button class="transport-button" type="button" data-transport-preset="umeda">梅田</button>
                   <button class="transport-button" type="button" data-transport-preset="other">その他</button>
                 </div>
-                <input id="transportInput" name="transport" type="number" min="0" step="1" value="580" readonly>
-                <p class="quick-add-note">交通費は原価に自動加算されます。</p>
+                <input id="transportInput" name="transport" type="number" min="0" step="1" value="" placeholder="ボタン選択で入力" readonly>
+                <p class="quick-add-note">交通費は販売済み利益から差し引かれます。</p>
               </div>
               <button class="button button-primary" id="addButton" type="submit">追加する</button>
             </form>

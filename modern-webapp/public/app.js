@@ -38,6 +38,8 @@ const monthlyState = {
 };
 
 const soldProfitValue = document.getElementById('soldProfitValue');
+const soldProfitGrossValue = document.getElementById('soldProfitGrossValue');
+const soldTransportValue = document.getElementById('soldTransportValue');
 const soldProfitNote = document.getElementById('soldProfitNote');
 const unsoldCostValue = document.getElementById('unsoldCostValue');
 const unsoldCostNote = document.getElementById('unsoldCostNote');
@@ -98,7 +100,7 @@ const TRANSPORT_PRESET_VALUES = {
   umeda: 680,
   other: null
 };
-let selectedTransportPreset = 'tennoji';
+let selectedTransportPreset = '';
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -392,7 +394,8 @@ function bindEvents() {
       const button = event.target.closest('button[data-transport-preset]');
       if (!button) return;
       const preset = String(button.dataset.transportPreset || '').trim();
-      applyTransportPreset_(preset, { keepCustom: true });
+      const keepCustom = preset === 'other' && selectedTransportPreset === 'other';
+      applyTransportPreset_(preset, { keepCustom: keepCustom });
       if (preset === 'other' && transportInput) {
         transportInput.focus();
       }
@@ -441,13 +444,13 @@ function bindEvents() {
   quickAddForm.addEventListener('submit', async function(event) {
     event.preventDefault();
     const transportCost = getQuickAddTransportAmount_();
-    const baseCost = sanitizeAmount_(quickAddForm.cost.value);
     const payload = {
       status: draftStatus,
       name: quickAddForm.name.value.trim(),
       revenue: revenueInput.value,
       shipping: shippingInput.value,
-      cost: String(baseCost + transportCost)
+      cost: quickAddForm.cost.value,
+      transport: String(transportCost)
     };
     await runApi(async function() {
       const data = await request('/api/items', {
@@ -460,7 +463,7 @@ function bindEvents() {
       }
       quickAddForm.reset();
       shippingInput.value = '160';
-      applyTransportPreset_('tennoji');
+      applyTransportPreset_('');
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
       scrollToItemRowAndAnimate_(addedItemId, payload.status, 10, addButton);
@@ -515,13 +518,15 @@ function bindEvents() {
 
 function readRowPayload(row, status) {
   const shippingRaw = row.querySelector('[data-field="shipping"]').value;
+  const transportRaw = row.dataset.transport || '0';
   return {
     id: row.dataset.id,
     status: status,
     name: row.querySelector('[data-field="name"]').value.trim(),
     revenue: row.querySelector('[data-field="revenue"]').value,
     shipping: shippingRaw === '' ? String(DEFAULT_SHIPPING) : shippingRaw,
-    cost: row.querySelector('[data-field="cost"]').value
+    cost: row.querySelector('[data-field="cost"]').value,
+    transport: transportRaw
   };
 }
 
@@ -912,7 +917,7 @@ function applyTransportPreset_(preset, options) {
   const candidate = String(preset || '').trim().toLowerCase();
   const normalizedPreset = Object.prototype.hasOwnProperty.call(TRANSPORT_PRESET_VALUES, candidate)
     ? candidate
-    : 'tennoji';
+    : '';
   selectedTransportPreset = normalizedPreset;
 
   document.querySelectorAll('[data-transport-preset]').forEach(function(button) {
@@ -920,6 +925,12 @@ function applyTransportPreset_(preset, options) {
   });
 
   if (!transportInput) return;
+  if (!normalizedPreset) {
+    transportInput.readOnly = true;
+    transportInput.placeholder = 'ボタン選択で入力';
+    transportInput.value = '';
+    return;
+  }
   if (normalizedPreset === 'other') {
     transportInput.readOnly = false;
     transportInput.placeholder = '0';
@@ -1140,7 +1151,8 @@ async function firebaseLoadDashboard_() {
       name: String(data.name || '').trim(),
       revenue: sanitizeAmount_(data.revenue),
       shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
-      cost: sanitizeAmount_(data.cost)
+      cost: sanitizeAmount_(data.cost),
+      transport: sanitizeAmount_(data.transport)
     };
   });
   return buildDashboardDataFromItems_(firebaseItemsCache);
@@ -1159,7 +1171,8 @@ async function firebaseSaveItem_(payload) {
     name: item.name,
     revenue: item.revenue,
     shipping: item.shipping,
-    cost: item.cost
+    cost: item.cost,
+    transport: item.transport
   };
 
   await firebaseItemsCollection.doc(id).set({
@@ -1168,6 +1181,7 @@ async function firebaseSaveItem_(payload) {
     revenue: stored.revenue,
     shipping: stored.shipping,
     cost: stored.cost,
+    transport: stored.transport,
     createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : now,
     updatedAtMs: now
   }, { merge: true });
@@ -1270,6 +1284,7 @@ async function firebaseArchive_() {
       revenue: item.revenue,
       shipping: item.shipping,
       cost: item.cost,
+      transport: item.transport,
       archivedAtMs: archivedAt
     }, { merge: true });
     batch.delete(firebaseItemsCollection.doc(item.id));
@@ -1299,7 +1314,8 @@ async function firebaseLoadMonthly_() {
         name: String(data.name || '').trim(),
         revenue: sanitizeAmount_(data.revenue),
         shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
-        cost: sanitizeAmount_(data.cost)
+        cost: sanitizeAmount_(data.cost),
+        transport: sanitizeAmount_(data.transport)
       };
     });
     const soldItems = archiveItems
@@ -1363,6 +1379,7 @@ function sanitizePayloadForStore_(payload) {
   const revenue = sanitizeAmount_(source.revenue);
   const shipping = sanitizeAmount_(source.shipping, DEFAULT_SHIPPING);
   const cost = sanitizeAmount_(source.cost);
+  const transport = sanitizeAmount_(source.transport);
   const name = String(source.name || '').trim();
 
   if (!name) {
@@ -1378,7 +1395,8 @@ function sanitizePayloadForStore_(payload) {
     name: name,
     revenue: revenue,
     shipping: shipping,
-    cost: cost
+    cost: cost,
+    transport: transport
   };
 }
 
@@ -1386,6 +1404,7 @@ function enrichItem_(item) {
   const revenue = sanitizeAmount_(item.revenue);
   const shipping = sanitizeAmount_(item.shipping, DEFAULT_SHIPPING);
   const cost = sanitizeAmount_(item.cost);
+  const transport = sanitizeAmount_(item.transport);
   const hasRevenue = revenue > 0;
   const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
   const profit = hasRevenue ? revenue - fee - shipping - cost : -cost;
@@ -1398,6 +1417,7 @@ function enrichItem_(item) {
     revenue: revenue,
     shipping: shipping,
     cost: cost,
+    transport: transport,
     fee: fee,
     profit: profit,
     margin: margin
@@ -1409,7 +1429,9 @@ function buildSummary_(soldItems, unsoldItems) {
   const soldFee = soldItems.reduce(function(total, item) { return total + item.fee; }, 0);
   const soldShipping = soldItems.reduce(function(total, item) { return total + item.shipping; }, 0);
   const soldCost = soldItems.reduce(function(total, item) { return total + item.cost; }, 0);
-  const soldProfit = soldItems.reduce(function(total, item) { return total + item.profit; }, 0);
+  const soldProfitGross = soldItems.reduce(function(total, item) { return total + item.profit; }, 0);
+  const soldTransport = soldItems.reduce(function(total, item) { return total + sanitizeAmount_(item.transport); }, 0);
+  const soldProfit = soldProfitGross - soldTransport;
   const unsoldRevenue = unsoldItems.reduce(function(total, item) { return total + item.revenue; }, 0);
   const unsoldProfit = unsoldItems.reduce(function(total, item) { return total + item.profit; }, 0);
   const unsoldCost = unsoldItems.reduce(function(total, item) { return total + item.cost; }, 0);
@@ -1420,6 +1442,8 @@ function buildSummary_(soldItems, unsoldItems) {
     soldFee: soldFee,
     soldShipping: soldShipping,
     soldCost: soldCost,
+    soldProfitGross: soldProfitGross,
+    soldTransport: soldTransport,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
     unsoldRevenue: unsoldRevenue,
@@ -1709,7 +1733,7 @@ function renderSoldRow(item) {
   const rowClass = item.profit < 0 || item.margin < 0 ? 'row-sold-bad' : (item.margin >= 0.2 ? 'row-sold-good' : '');
   const rateClass = item.margin < 0 ? 'bad' : (item.margin >= 0.2 ? 'good' : 'neutral');
   return `
-    <tr class="${rowClass}" data-id="${escapeHtml(item.id)}">
+    <tr class="${rowClass}" data-id="${escapeHtml(item.id)}" data-transport="${escapeHtml(String(item.transport || 0))}">
       <td class="selection-cell"><input data-select-row type="checkbox" aria-label="選択"></td>
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
       <td><input data-field="revenue" type="number" min="0" step="1" value="${escapeHtml(String(item.revenue || ''))}"></td>
@@ -1730,7 +1754,7 @@ function renderUnsoldRow(item) {
     ? (item.margin < 0 ? 'bad' : (item.margin >= 0.2 ? 'good' : 'neutral'))
     : 'neutral';
   return `
-    <tr class="${rowClass}" data-id="${escapeHtml(item.id)}">
+    <tr class="${rowClass}" data-id="${escapeHtml(item.id)}" data-transport="${escapeHtml(String(item.transport || 0))}">
       <td class="selection-cell"><input data-select-row type="checkbox" aria-label="選択"></td>
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
       <td><input data-field="revenue" type="number" min="0" step="1" placeholder="0" value="${escapeHtml(String(item.revenue || ''))}"></td>
@@ -1743,7 +1767,16 @@ function renderUnsoldRow(item) {
 }
 
 function applySummary(summary, lastUpdated) {
-  soldProfitValue.textContent = formatYen(summary.soldProfit);
+  const soldProfit = Number(summary.soldProfit || 0);
+  const soldProfitGross = Number(typeof summary.soldProfitGross !== 'undefined' ? summary.soldProfitGross : soldProfit);
+  const soldTransport = sanitizeAmount_(summary.soldTransport);
+  soldProfitValue.textContent = formatYen(soldProfit);
+  if (soldProfitGrossValue) {
+    soldProfitGrossValue.textContent = formatYen(soldProfitGross);
+  }
+  if (soldTransportValue) {
+    soldTransportValue.textContent = formatSignedYen(-soldTransport);
+  }
   soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
   unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
   unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
@@ -1767,7 +1800,8 @@ function recalcSummaryFromDom() {
   let soldFee = 0;
   let soldShipping = 0;
   let soldCost = 0;
-  let soldProfit = 0;
+  let soldProfitGross = 0;
+  let soldTransport = 0;
   let unsoldRevenue = 0;
   let unsoldProfit = 0;
   let unsoldCost = 0;
@@ -1776,13 +1810,15 @@ function recalcSummaryFromDom() {
     const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
     const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
     const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
+    const transport = sanitizeAmount_(row.dataset.transport);
     const fee = Math.floor(revenue * 0.1);
     const profit = revenue - fee - shipping - cost;
     soldRevenue += revenue;
     soldFee += fee;
     soldShipping += shipping;
     soldCost += cost;
-    soldProfit += profit;
+    soldTransport += transport;
+    soldProfitGross += profit;
   });
 
   unsoldRows.forEach(function(row) {
@@ -1797,12 +1833,15 @@ function recalcSummaryFromDom() {
     unsoldCost += cost;
   });
   const overallRevenue = soldRevenue + unsoldRevenue;
+  const soldProfit = soldProfitGross - soldTransport;
 
   applySummary({
     soldRevenue: soldRevenue,
     soldFee: soldFee,
     soldShipping: soldShipping,
     soldCost: soldCost,
+    soldProfitGross: soldProfitGross,
+    soldTransport: soldTransport,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
     unsoldRevenue: unsoldRevenue,
