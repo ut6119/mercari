@@ -543,8 +543,10 @@ function buildSummary_(soldItems, unsoldItems) {
   const soldShipping = sumBy_(soldItems, 'shipping');
   const soldCost = sumBy_(soldItems, 'cost');
   const soldProfit = sumBy_(soldItems, 'profit');
+  const unsoldRevenue = sumBy_(unsoldItems, 'revenue');
   const unsoldProfit = sumBy_(unsoldItems, 'profit');
   const unsoldCost = sumBy_(unsoldItems, 'cost');
+  const overallRevenue = soldRevenue + unsoldRevenue;
 
   return {
     soldRevenue: soldRevenue,
@@ -553,9 +555,12 @@ function buildSummary_(soldItems, unsoldItems) {
     soldCost: soldCost,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldRevenue: unsoldRevenue,
     unsoldProfit: unsoldProfit,
+    unsoldMargin: unsoldRevenue > 0 ? unsoldProfit / unsoldRevenue : 0,
     unsoldCost: unsoldCost,
     overallNet: soldProfit + unsoldProfit,
+    overallMargin: overallRevenue > 0 ? (soldProfit + unsoldProfit) / overallRevenue : 0,
     soldCount: soldItems.length,
     unsoldCount: unsoldItems.length
   };

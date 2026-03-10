@@ -28,6 +28,7 @@ const soldProfitNote = document.getElementById('soldProfitNote');
 const unsoldCostValue = document.getElementById('unsoldCostValue');
 const unsoldCostNote = document.getElementById('unsoldCostNote');
 const overallNetValue = document.getElementById('overallNetValue');
+const overallNetNote = document.getElementById('overallNetNote');
 const soldRevenueValue = document.getElementById('soldRevenueValue');
 const lastUpdatedValue = document.getElementById('lastUpdatedValue');
 const soldCountLabel = document.getElementById('soldCountLabel');
@@ -984,8 +985,10 @@ function buildSummary_(soldItems, unsoldItems) {
   const soldShipping = soldItems.reduce(function(total, item) { return total + item.shipping; }, 0);
   const soldCost = soldItems.reduce(function(total, item) { return total + item.cost; }, 0);
   const soldProfit = soldItems.reduce(function(total, item) { return total + item.profit; }, 0);
+  const unsoldRevenue = unsoldItems.reduce(function(total, item) { return total + item.revenue; }, 0);
   const unsoldProfit = unsoldItems.reduce(function(total, item) { return total + item.profit; }, 0);
   const unsoldCost = unsoldItems.reduce(function(total, item) { return total + item.cost; }, 0);
+  const overallRevenue = soldRevenue + unsoldRevenue;
 
   return {
     soldRevenue: soldRevenue,
@@ -994,9 +997,12 @@ function buildSummary_(soldItems, unsoldItems) {
     soldCost: soldCost,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldRevenue: unsoldRevenue,
     unsoldProfit: unsoldProfit,
+    unsoldMargin: unsoldRevenue > 0 ? unsoldProfit / unsoldRevenue : 0,
     unsoldCost: unsoldCost,
     overallNet: soldProfit + unsoldProfit,
+    overallMargin: overallRevenue > 0 ? (soldProfit + unsoldProfit) / overallRevenue : 0,
     soldCount: soldItems.length,
     unsoldCount: unsoldItems.length
   };
@@ -1287,10 +1293,13 @@ function renderUnsoldRow(item) {
 function applySummary(summary, lastUpdated) {
   soldProfitValue.textContent = formatYen(summary.soldProfit);
   soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
-  unsoldCostValue.textContent = formatYen(summary.unsoldCost);
-  unsoldCostNote.textContent = summary.unsoldCount + '件 / 現在の投資額';
+  unsoldCostValue.textContent = formatSignedYen(summary.unsoldProfit);
+  unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
   overallNetValue.textContent = formatSignedYen(summary.overallNet);
   overallNetValue.style.color = summary.overallNet < 0 ? '#9f3f3f' : '#1f6a52';
+  if (overallNetNote) {
+    overallNetNote.textContent = '合計利益率 ' + formatPercent(summary.overallMargin);
+  }
   soldRevenueValue.textContent = formatYen(summary.soldRevenue);
   soldCountLabel.textContent = summary.soldCount + '件';
   unsoldCountLabel.textContent = summary.unsoldCount + '件';
@@ -1307,6 +1316,7 @@ function recalcSummaryFromDom() {
   let soldShipping = 0;
   let soldCost = 0;
   let soldProfit = 0;
+  let unsoldRevenue = 0;
   let unsoldProfit = 0;
   let unsoldCost = 0;
 
@@ -1330,9 +1340,11 @@ function recalcSummaryFromDom() {
     const hasRevenue = revenue > 0;
     const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
     const profit = hasRevenue ? (revenue - fee - shipping - cost) : -cost;
+    unsoldRevenue += revenue;
     unsoldProfit += profit;
     unsoldCost += cost;
   });
+  const overallRevenue = soldRevenue + unsoldRevenue;
 
   applySummary({
     soldRevenue: soldRevenue,
@@ -1341,9 +1353,12 @@ function recalcSummaryFromDom() {
     soldCost: soldCost,
     soldProfit: soldProfit,
     soldMargin: soldRevenue > 0 ? soldProfit / soldRevenue : 0,
+    unsoldRevenue: unsoldRevenue,
     unsoldProfit: unsoldProfit,
+    unsoldMargin: unsoldRevenue > 0 ? unsoldProfit / unsoldRevenue : 0,
     unsoldCost: unsoldCost,
     overallNet: soldProfit + unsoldProfit,
+    overallMargin: overallRevenue > 0 ? (soldProfit + unsoldProfit) / overallRevenue : 0,
     soldCount: soldRows.length,
     unsoldCount: unsoldRows.length
   });
