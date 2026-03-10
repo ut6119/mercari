@@ -363,11 +363,21 @@ async function handleBulkAction(status, event) {
     setSelectionMode('unsold', false);
 
     if (action === 'to-sold') {
-      playCategoryBurst_('sold', Math.min(18, Math.max(8, selectedIds.length + 4)));
+      scrollToMovedRowsAndAnimate_(
+        selectedIds,
+        'sold',
+        Math.min(18, Math.max(8, selectedIds.length + 4)),
+        soldPanel
+      );
       showToast('選択行を販売済みに移動しました。');
     }
     if (action === 'to-unsold') {
-      playCategoryBurst_('unsold', Math.min(18, Math.max(8, selectedIds.length + 4)));
+      scrollToMovedRowsAndAnimate_(
+        selectedIds,
+        'unsold',
+        Math.min(18, Math.max(8, selectedIds.length + 4)),
+        unsoldPanel
+      );
       showToast('選択行を未販売在庫へ移動しました。');
     }
     if (action === 'delete') showToast('選択行を削除しました。');
@@ -1525,6 +1535,38 @@ function scrollToItemRowAndAnimate_(itemId, status, intensity, fallbackAnchorEl)
 
   setTimeout(function() {
     playCategoryBurst_(status, intensity, row);
+  }, 650);
+}
+
+function scrollToMovedRowsAndAnimate_(itemIds, status, intensity, fallbackAnchorEl) {
+  const ids = Array.isArray(itemIds)
+    ? itemIds.map(function(id) { return String(id || '').trim(); }).filter(Boolean)
+    : [];
+  if (!ids.length) {
+    playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    return;
+  }
+
+  const targetRow = ids
+    .map(function(id) { return findItemRowById_(id, status); })
+    .find(Boolean);
+  if (!targetRow) {
+    playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    return;
+  }
+
+  targetRow.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+    inline: 'nearest'
+  });
+
+  targetRow.classList.remove('row-focus-flash');
+  void targetRow.offsetWidth;
+  targetRow.classList.add('row-focus-flash');
+
+  setTimeout(function() {
+    playCategoryBurst_(status, intensity, targetRow);
   }, 650);
 }
 
