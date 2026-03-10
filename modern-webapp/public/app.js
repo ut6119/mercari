@@ -10,6 +10,7 @@ const GAS_API_ENDPOINT = (window.APP_CONFIG && window.APP_CONFIG.gasEndpoint)
 const API_WRITE_TOKEN = (window.APP_CONFIG && window.APP_CONFIG.apiWriteToken)
   ? String(window.APP_CONFIG.apiWriteToken).trim()
   : '';
+const REQUIRE_LOGIN = Boolean(window.APP_CONFIG && window.APP_CONFIG.requireLogin);
 const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
@@ -21,6 +22,10 @@ let backendMode = 'gas';
 let firebaseDb = null;
 let firebaseItemsCollection = null;
 let firebaseItemsCache = [];
+let authFirebaseApp = null;
+let firebaseAuth = null;
+let signedInUser = null;
+let signedInIdToken = '';
 const monthlyState = {
   months: [],
   selectedMonth: ''
@@ -65,6 +70,9 @@ const addButton = document.getElementById('addButton');
 const toast = document.getElementById('toast');
 const heroMascot = document.getElementById('heroMascot');
 const burstLayer = document.getElementById('burstLayer');
+const authStatus = document.getElementById('authStatus');
+const authLoginButton = document.getElementById('authLoginButton');
+const authLogoutButton = document.getElementById('authLogoutButton');
 const selectionMode = {
   sold: false,
   unsold: false
@@ -83,6 +91,7 @@ init().catch(function(error) {
 
 async function init() {
   setupHeroMascot_();
+  await initializeAuth_();
   await initializeBackend();
   bindEvents();
   activateView_('home');
@@ -140,12 +149,85 @@ async function initializeBackend() {
     return;
   }
 
-  const app = window.firebase.apps && window.firebase.apps.length
-    ? window.firebase.app()
-    : window.firebase.initializeApp(config);
+  const app = getOrCreateFirebaseApp_(config);
+  if (!activateFirebaseAppCheck_(app, FIREBASE_OPTIONS.appCheck || {})) {
+    backendMode = 'gas';
+    return;
+  }
   firebaseDb = window.firebase.firestore(app);
   firebaseItemsCollection = firebaseDb.collection(FIREBASE_COLLECTION);
   backendMode = 'firebase';
+}
+
+function getOrCreateFirebaseApp_(config) {
+  if (authFirebaseApp) return authFirebaseApp;
+  authFirebaseApp = window.firebase.apps && window.firebase.apps.length
+    ? window.firebase.app()
+    : window.firebase.initializeApp(config);
+  return authFirebaseApp;
+}
+
+async function initializeAuth_() {
+  updateAuthUi_('認証: 未設定');
+  if (!REQUIRE_LOGIN) {
+    updateAuthUi_('認証: 任意');
+    return;
+  }
+  if (!window.firebase || !window.firebase.auth) {
+    updateAuthUi_('認証: 利用不可');
+    return;
+  }
+
+  const config = FIREBASE_OPTIONS.config || {};
+  if (!config.projectId || !config.apiKey || !config.appId || isPlaceholderValue_(config.apiKey)) {
+    updateAuthUi_('認証: 未設定');
+    return;
+  }
+
+  const app = getOrCreateFirebaseApp_(config);
+  firebaseAuth = window.firebase.auth(app);
+  firebaseAuth.onAuthStateChanged(function(user) {
+    signedInUser = user || null;
+    if (!user) {
+      signedInIdToken = '';
+      updateAuthUi_('認証: 未ログイン');
+      return;
+    }
+    void user.getIdToken().then(function(token) {
+      signedInIdToken = String(token || '');
+      const email = String(user.email || '').trim();
+      updateAuthUi_(email ? ('認証: ' + email) : '認証: ログイン済み');
+    }).catch(function() {
+      signedInIdToken = '';
+      updateAuthUi_('認証: トークン失敗');
+    });
+  });
+}
+
+async function signInWithGoogle_() {
+  if (!firebaseAuth) {
+    throw new Error('ログイン設定が未完了です。');
+  }
+  const provider = new window.firebase.auth.GoogleAuthProvider();
+  await firebaseAuth.signInWithPopup(provider);
+}
+
+async function signOut_() {
+  if (!firebaseAuth) return;
+  await firebaseAuth.signOut();
+}
+
+function updateAuthUi_(statusText) {
+  if (authStatus) {
+    authStatus.textContent = statusText;
+  }
+  const signedIn = Boolean(signedInUser && signedInIdToken);
+  if (authLoginButton) {
+    authLoginButton.style.display = REQUIRE_LOGIN && !signedIn ? 'inline-flex' : 'none';
+  }
+  if (authLogoutButton) {
+    authLogoutButton.style.display = signedIn ? 'inline-flex' : 'none';
+  }
 }
 
 function isPlaceholderValue_(value) {
@@ -154,7 +236,53 @@ function isPlaceholderValue_(value) {
   return text.includes('replace_with') || text.includes('your_') || text.includes('xxxxx');
 }
 
+function activateFirebaseAppCheck_(app, options) {
+  if (!options || options.enabled !== true) {
+    showToast('Firebase App Checkが無効のためGASモードで動作します。');
+    return false;
+  }
+  if (!window.firebase || !window.firebase.appCheck) {
+    showToast('Firebase App Check SDKが未読み込みのためGASモードで動作します。');
+    return false;
+  }
+
+  const siteKey = String(options.siteKey || '').trim();
+  if (!siteKey || isPlaceholderValue_(siteKey)) {
+    showToast('Firebase App CheckのsiteKey未設定のためGASモードで動作します。');
+    return false;
+  }
+
+  try {
+    const debugToken = String(options.debugToken || '').trim();
+    if (debugToken && window.location.hostname === 'localhost') {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = debugToken === 'true' ? true : debugToken;
+    }
+    const appCheck = window.firebase.appCheck(app);
+    appCheck.activate(siteKey, true);
+    return true;
+  } catch (error) {
+    console.error(error);
+    showToast('Firebase App Check初期化に失敗したためGASモードで動作します。');
+    return false;
+  }
+}
+
 function bindEvents() {
+  if (authLoginButton) {
+    authLoginButton.addEventListener('click', function() {
+      void runApi(async function() {
+        await signInWithGoogle_();
+      });
+    });
+  }
+  if (authLogoutButton) {
+    authLogoutButton.addEventListener('click', function() {
+      void runApi(async function() {
+        await signOut_();
+      });
+    });
+  }
+
   viewTabs.forEach(function(button) {
     button.addEventListener('click', function() {
       const target = String(button.dataset.viewTab || '').trim();
@@ -655,6 +783,9 @@ async function reloadData(message) {
 
 async function request(url, options) {
   const method = String((options && options.method) || 'GET').toUpperCase();
+  if (method !== 'GET' && REQUIRE_LOGIN && !signedInIdToken && backendMode !== 'local') {
+    throw new Error('編集にはGoogleログインが必要です。');
+  }
 
   if (backendMode === 'firebase') {
     return firebaseRequest(url, options);
@@ -672,8 +803,10 @@ async function request(url, options) {
     return data;
   }
 
-  if (method !== 'GET' && !API_WRITE_TOKEN) {
-    throw new Error('書き込みは停止中です。管理者がAPIトークンを設定してください。');
+  if (method !== 'GET') {
+    if (!REQUIRE_LOGIN && !API_WRITE_TOKEN && !signedInIdToken) {
+      throw new Error('書き込みは停止中です。管理者がAPIトークンを設定してください。');
+    }
   }
 
   const params = convertRequestToGasParams_(url, options);
@@ -774,6 +907,9 @@ function convertRequestToGasParams_(url, options) {
 
   if (method !== 'GET' && API_WRITE_TOKEN) {
     params.set('token', API_WRITE_TOKEN);
+  }
+  if (method !== 'GET' && signedInIdToken) {
+    params.set('idToken', signedInIdToken);
   }
   params.set('_ts', String(Date.now()));
   return params;

@@ -59,6 +59,29 @@
         overflow: visible;
         text-overflow: clip;
       }
+      .auth-row {
+        margin-top: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .auth-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: #1f4b99;
+        background: #eaf1ff;
+        border: 1px solid #c8dafc;
+        border-radius: 999px;
+        padding: 5px 10px;
+      }
+      .auth-button {
+        padding: 7px 12px;
+        font-size: 12px;
+        border-radius: 999px;
+      }
       .button, button {
         appearance: none; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700;
         cursor: pointer; transition: transform 120ms ease, opacity 120ms ease;
@@ -437,6 +460,11 @@
           <h1 class="title">メルカリ収支アプリ</h1>
         </div>
         <div class="hero-note">ホーム・月別・棒グラフを切替できます。</div>
+        <div class="auth-row">
+          <span id="authStatus" class="auth-status">認証: 確認中</span>
+          <button class="button button-secondary auth-button" id="authLoginButton" type="button">Googleログイン</button>
+          <button class="button button-secondary auth-button" id="authLogoutButton" type="button">ログアウト</button>
+        </div>
 
         <div class="stats">
           <div class="stat">
@@ -656,11 +684,14 @@
     <div class="toast" id="toast"></div>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-check-compat.js"></script>
     <script src="./app-config.js"></script>
     <script>
       var defaultConfig = {
         gasEndpoint: 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec',
         apiWriteToken: '',
+        requireLogin: true,
         heroGifUrl: './assets/mascot.gif',
         firebase: {
           enabled: false,
@@ -671,15 +702,24 @@
             authDomain: '',
             projectId: '',
             appId: ''
+          },
+          appCheck: {
+            enabled: false,
+            siteKey: '',
+            debugToken: ''
           }
         }
       };
       var runtimeConfig = window.APP_RUNTIME_CONFIG || {};
       var runtimeFirebase = runtimeConfig.firebase || {};
       var runtimeFirebaseConfig = runtimeFirebase.config || {};
+      var runtimeFirebaseAppCheck = runtimeFirebase.appCheck || {};
       window.APP_CONFIG = {
         gasEndpoint: runtimeConfig.gasEndpoint || defaultConfig.gasEndpoint,
         apiWriteToken: runtimeConfig.apiWriteToken || defaultConfig.apiWriteToken,
+        requireLogin: typeof runtimeConfig.requireLogin === 'boolean'
+          ? runtimeConfig.requireLogin
+          : defaultConfig.requireLogin,
         heroGifUrl: runtimeConfig.heroGifUrl || defaultConfig.heroGifUrl,
         firebase: {
           enabled: typeof runtimeFirebase.enabled === 'boolean'
@@ -692,6 +732,13 @@
             authDomain: runtimeFirebaseConfig.authDomain || defaultConfig.firebase.config.authDomain,
             projectId: runtimeFirebaseConfig.projectId || defaultConfig.firebase.config.projectId,
             appId: runtimeFirebaseConfig.appId || defaultConfig.firebase.config.appId
+          },
+          appCheck: {
+            enabled: typeof runtimeFirebaseAppCheck.enabled === 'boolean'
+              ? runtimeFirebaseAppCheck.enabled
+              : defaultConfig.firebase.appCheck.enabled,
+            siteKey: runtimeFirebaseAppCheck.siteKey || defaultConfig.firebase.appCheck.siteKey,
+            debugToken: runtimeFirebaseAppCheck.debugToken || defaultConfig.firebase.appCheck.debugToken
           }
         }
       };

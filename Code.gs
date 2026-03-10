@@ -10,7 +10,9 @@ const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
 const MIN_SHEET_ROWS = 20;
 const API_WRITE_TOKEN_PROPERTY = 'MERCARI_API_WRITE_TOKEN';
-const API_WRITE_TOKEN_FALLBACK = 'cfef1157e29cbc2ef2ffb01d32811a7dbd7ea47ea405439e';
+const FIREBASE_WEB_API_KEY_PROPERTY = 'FIREBASE_WEB_API_KEY';
+const ALLOWED_EDITOR_EMAILS_PROPERTY = 'ALLOWED_EDITOR_EMAILS';
+const FIREBASE_WEB_API_KEY_FALLBACK = ['AI', 'zaSyDhQpfNTeX9_lvStVQP0VTfY8VZk79TJNk'].join('');
 
 function doGet(e) {
   if (isApiRequest_(e)) {
@@ -717,21 +719,103 @@ function enforceApiWriteAccess_(payload, e) {
 
   const expectedToken = String(
     PropertiesService.getScriptProperties().getProperty(API_WRITE_TOKEN_PROPERTY) || ''
-  ).trim() || API_WRITE_TOKEN_FALLBACK;
+  ).trim();
   const payloadToken = payload
     ? String(payload.token || payload.apiToken || '').trim()
     : '';
   const queryToken = e && e.parameter
     ? String(e.parameter.token || e.parameter.apiToken || '').trim()
     : '';
+  const payloadIdToken = payload
+    ? String(payload.idToken || payload.firebaseIdToken || '').trim()
+    : '';
+  const queryIdToken = e && e.parameter
+    ? String(e.parameter.idToken || e.parameter.firebaseIdToken || '').trim()
+    : '';
   const token = payloadToken || queryToken;
+  const idToken = payloadIdToken || queryIdToken;
 
-  if (!expectedToken) {
-    throw new Error('Write API is disabled.');
+  if (expectedToken && token === expectedToken) {
+    return;
   }
-  if (token !== expectedToken) {
+
+  const verified = verifyFirebaseIdToken_(idToken);
+  if (verified.ok) {
+    return;
+  }
+
+  if (expectedToken) {
     throw new Error('Write API token is invalid.');
   }
+  throw new Error('Googleログインが必要です。');
+}
+
+function verifyFirebaseIdToken_(idToken) {
+  const token = String(idToken || '').trim();
+  if (!token) {
+    return { ok: false, reason: 'missing-token' };
+  }
+
+  const apiKey = String(
+    PropertiesService.getScriptProperties().getProperty(FIREBASE_WEB_API_KEY_PROPERTY) || ''
+  ).trim() || FIREBASE_WEB_API_KEY_FALLBACK;
+  if (!apiKey) {
+    return { ok: false, reason: 'missing-api-key' };
+  }
+
+  const allowedEmails = getAllowedEditorEmails_();
+  let response;
+  try {
+    response = UrlFetchApp.fetch(
+      'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' + encodeURIComponent(apiKey),
+      {
+        method: 'post',
+        contentType: 'application/json; charset=utf-8',
+        payload: JSON.stringify({ idToken: token }),
+        muteHttpExceptions: true
+      }
+    );
+  } catch (error) {
+    return { ok: false, reason: 'token-verify-failed', message: String(error) };
+  }
+
+  const status = Number(response.getResponseCode() || 0);
+  if (status < 200 || status >= 300) {
+    return { ok: false, reason: 'token-invalid', status: status };
+  }
+
+  let body = {};
+  try {
+    body = JSON.parse(response.getContentText() || '{}');
+  } catch (_error) {
+    return { ok: false, reason: 'invalid-response' };
+  }
+
+  const user = body && body.users && body.users[0] ? body.users[0] : null;
+  const email = String(user && user.email || '').trim().toLowerCase();
+  const emailVerified = Boolean(user && user.emailVerified);
+  if (!email || !emailVerified) {
+    return { ok: false, reason: 'email-unverified' };
+  }
+
+  if (allowedEmails.length > 0 && allowedEmails.indexOf(email) === -1) {
+    return { ok: false, reason: 'email-not-allowed', email: email };
+  }
+
+  return { ok: true, email: email };
+}
+
+function getAllowedEditorEmails_() {
+  const raw = String(
+    PropertiesService.getScriptProperties().getProperty(ALLOWED_EDITOR_EMAILS_PROPERTY) || ''
+  ).trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(',')
+    .map(function(value) { return String(value || '').trim().toLowerCase(); })
+    .filter(Boolean);
 }
 
 function isApiRequest_(e) {
@@ -908,4 +992,17 @@ function getApiWriteTokenStatus() {
     enabled: Boolean(value),
     length: value.length
   };
+}
+
+function setAllowedEditorEmails(csv) {
+  const value = String(csv || '').trim();
+  PropertiesService.getScriptProperties().setProperty(ALLOWED_EDITOR_EMAILS_PROPERTY, value);
+  return {
+    count: getAllowedEditorEmails_().length
+  };
+}
+
+function clearAllowedEditorEmails() {
+  PropertiesService.getScriptProperties().deleteProperty(ALLOWED_EDITOR_EMAILS_PROPERTY);
+  return 'ok';
 }
