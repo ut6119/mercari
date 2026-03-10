@@ -1775,7 +1775,7 @@ function applySummary(summary, lastUpdated) {
   const soldTransport = sanitizeAmount_(summary.soldTransport);
   soldProfitValue.textContent = formatYen(soldProfit);
   if (soldTransportValue) {
-    soldTransportValue.textContent = formatSignedYen(-soldTransport);
+    soldTransportValue.textContent = formatYen(soldTransport);
   }
   soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
   unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
