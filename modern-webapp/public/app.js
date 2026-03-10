@@ -205,11 +205,12 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify(payload)
       });
+      const addedItemId = findAddedItemId_(currentData, data, payload.status, payload.name);
       quickAddForm.reset();
       shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
-      playCategoryBurst_(payload.status, 10, addButton);
+      scrollToItemRowAndAnimate_(addedItemId, payload.status, 10, addButton);
       showToast('商品を追加しました。');
     });
   });
@@ -1467,12 +1468,80 @@ function playCategoryBurst_(status, intensity, anchorEl) {
     sprite.style.setProperty('--to-scale', toScale);
     sprite.style.setProperty('--from-rotate', fromRotate + 'deg');
     sprite.style.setProperty('--to-rotate', toRotate + 'deg');
-    sprite.style.animationDuration = Math.round(560 + Math.random() * 260) + 'ms';
+    sprite.style.animationDuration = Math.round(980 + Math.random() * 470) + 'ms';
+    sprite.style.animationDelay = Math.round(Math.random() * 140) + 'ms';
     sprite.addEventListener('animationend', function() {
       sprite.remove();
     }, { once: true });
     burstLayer.appendChild(sprite);
   }
+}
+
+function findAddedItemId_(beforeData, afterData, status, name) {
+  const normalizedStatus = normalizeStatusValue_(status) || 'unsold';
+  const beforeItems = getStatusItems_(beforeData, normalizedStatus);
+  const afterItems = getStatusItems_(afterData, normalizedStatus);
+  const beforeIds = new Set(beforeItems.map(function(item) { return String(item.id || ''); }));
+  const added = afterItems.find(function(item) {
+    const id = String(item && item.id || '');
+    return id && !beforeIds.has(id);
+  });
+  if (added && added.id) {
+    return String(added.id);
+  }
+  const normalizedName = String(name || '').trim();
+  if (!normalizedName) return '';
+  const sameName = afterItems.find(function(item) {
+    return String(item && item.name || '').trim() === normalizedName;
+  });
+  return sameName && sameName.id ? String(sameName.id) : '';
+}
+
+function getStatusItems_(data, status) {
+  if (!data || typeof data !== 'object') return [];
+  if (status === 'sold') return Array.isArray(data.soldItems) ? data.soldItems : [];
+  return Array.isArray(data.unsoldItems) ? data.unsoldItems : [];
+}
+
+function scrollToItemRowAndAnimate_(itemId, status, intensity, fallbackAnchorEl) {
+  if (!itemId) {
+    playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    return;
+  }
+  const row = findItemRowById_(itemId, status);
+  if (!row) {
+    playCategoryBurst_(status, intensity, fallbackAnchorEl);
+    return;
+  }
+
+  row.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+    inline: 'nearest'
+  });
+
+  row.classList.remove('row-focus-flash');
+  void row.offsetWidth;
+  row.classList.add('row-focus-flash');
+
+  setTimeout(function() {
+    playCategoryBurst_(status, intensity, row);
+  }, 420);
+}
+
+function findItemRowById_(itemId, status) {
+  const safeId = String(itemId || '').trim();
+  if (!safeId) return null;
+  const tbody = status === 'sold' ? soldTableBody : unsoldTableBody;
+  if (!tbody) return null;
+  return tbody.querySelector('tr[data-id="' + cssEscape_(safeId) + '"]');
+}
+
+function cssEscape_(value) {
+  if (window.CSS && typeof window.CSS.escape === 'function') {
+    return window.CSS.escape(value);
+  }
+  return String(value).replace(/["\\]/g, '\\$&');
 }
 
 function isRectVisibleInViewport_(rect) {
