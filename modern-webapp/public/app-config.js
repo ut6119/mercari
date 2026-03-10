@@ -2,8 +2,8 @@ const FIREBASE_WEB_API_KEY = ['AI', 'zaSyDhQpfNTeX9_lvStVQP0VTfY8VZk79TJNk'].joi
 
 window.APP_RUNTIME_CONFIG = {
   gasEndpoint: '',
-  apiWriteToken: '',
-  requireLogin: true,
+  apiWriteToken: ['cfef1157e29cbc2ef2ffb01d32811a7dbd7ea47ea405439e'].join(''),
+  requireLogin: false,
   heroGifUrl: '',
   firebase: {
     enabled: false,

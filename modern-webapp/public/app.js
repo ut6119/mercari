@@ -218,6 +218,12 @@ async function signOut_() {
 }
 
 function updateAuthUi_(statusText) {
+  if (!REQUIRE_LOGIN) {
+    if (authStatus && authStatus.parentElement) {
+      authStatus.parentElement.style.display = 'none';
+    }
+    return;
+  }
   if (authStatus) {
     authStatus.textContent = statusText;
   }
