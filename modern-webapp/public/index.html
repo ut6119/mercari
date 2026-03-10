@@ -55,8 +55,9 @@
         font-size: 13px;
         line-height: 1.45;
         max-width: calc(100% - 86px);
-        white-space: normal;
-        overflow-wrap: anywhere;
+        white-space: nowrap;
+        overflow: visible;
+        text-overflow: clip;
       }
       .button, button {
         appearance: none; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700;
@@ -422,7 +423,7 @@
         <div class="hero-top">
           <h1 class="title">メルカリ収支アプリ</h1>
         </div>
-        <div class="hero-note">ホーム・月別・棒グラフで収支を切り替えて確認できます。</div>
+        <div class="hero-note">ホーム・月別・棒グラフを切替できます。</div>
 
         <div class="stats">
           <div class="stat">

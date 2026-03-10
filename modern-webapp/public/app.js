@@ -209,7 +209,7 @@ function bindEvents() {
       shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
-      playCategoryBurst_(payload.status, 10);
+      playCategoryBurst_(payload.status, 10, addButton);
       showToast('商品を追加しました。');
     });
   });
@@ -1418,18 +1418,26 @@ function updateRowPreview(row, status) {
   else row.classList.add('row-unsold');
 }
 
-function playCategoryBurst_(status, intensity) {
+function playCategoryBurst_(status, intensity, anchorEl) {
   if (!burstLayer) return;
   const gifUrl = resolveBurstGifUrl_();
   if (!gifUrl) return;
 
   const targetPanel = status === 'sold' ? soldPanel : unsoldPanel;
-  if (!targetPanel) return;
-  const rect = targetPanel.getBoundingClientRect();
-  if (!rect || rect.width <= 0 || rect.height <= 0) return;
-
-  const centerX = rect.left + rect.width * 0.5;
-  const centerY = rect.top + Math.min(82, Math.max(42, rect.height * 0.2));
+  const rect = targetPanel ? targetPanel.getBoundingClientRect() : null;
+  const panelVisible = isRectVisibleInViewport_(rect);
+  let centerX = window.innerWidth * 0.5;
+  let centerY = Math.min(window.innerHeight * 0.34, 220);
+  if (panelVisible) {
+    centerX = rect.left + rect.width * 0.5;
+    centerY = rect.top + Math.min(82, Math.max(42, rect.height * 0.2));
+  } else if (anchorEl) {
+    const anchorRect = anchorEl.getBoundingClientRect();
+    if (isRectVisibleInViewport_(anchorRect)) {
+      centerX = anchorRect.left + anchorRect.width * 0.5;
+      centerY = anchorRect.top + anchorRect.height * 0.5;
+    }
+  }
   const count = Math.max(6, Math.min(18, Number(intensity) || 10));
 
   for (let i = 0; i < count; i += 1) {
@@ -1465,6 +1473,16 @@ function playCategoryBurst_(status, intensity) {
     }, { once: true });
     burstLayer.appendChild(sprite);
   }
+}
+
+function isRectVisibleInViewport_(rect) {
+  if (!rect) return false;
+  return rect.width > 0
+    && rect.height > 0
+    && rect.bottom > 0
+    && rect.top < window.innerHeight
+    && rect.right > 0
+    && rect.left < window.innerWidth;
 }
 
 function resolveBurstGifUrl_() {
