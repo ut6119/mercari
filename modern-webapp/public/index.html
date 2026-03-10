@@ -127,7 +127,7 @@
       }
       .sold-balance .sold-main .stat-balance-value { font-size: 12px; }
       .sold-balance .sold-transport .stat-balance-value { font-size: 12px; }
-      .sold-main-head {
+      .sold-card-head {
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -529,13 +529,13 @@
 
         <div class="stats">
           <div class="stat">
-            <div class="stat-label">販売済み利益</div>
+            <div class="sold-card-head">
+              <div class="stat-label">販売済み利益</div>
+              <button class="transport-clear-button" id="transportClearButton" type="button">削除</button>
+            </div>
             <div class="stat-balance sold-balance">
               <div class="stat-balance-item sold-main">
-                <div class="sold-main-head">
-                  <div class="stat-balance-label">販売済み利益</div>
-                  <button class="transport-clear-button" id="transportClearButton" type="button">削除</button>
-                </div>
+                <div class="stat-balance-label">販売済み利益</div>
                 <div class="stat-balance-value" id="soldProfitValue">¥0</div>
               </div>
               <div class="stat-balance-item sold-transport">
