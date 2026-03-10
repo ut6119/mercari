@@ -1021,7 +1021,11 @@ async function loadMonthlyDataFromGas_() {
   const params = new URLSearchParams();
   params.set('api', 'monthly');
   params.set('_ts', String(Date.now()));
-  return requestFromGasParams_(params, { requireSummary: false });
+  const data = await jsonpRequest(params);
+  if (!data || typeof data !== 'object') {
+    throw new Error('不正なレスポンスです。');
+  }
+  return data;
 }
 
 async function requestFromGasParams_(params, options) {
