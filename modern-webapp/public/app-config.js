@@ -16,8 +16,8 @@ window.APP_RUNTIME_CONFIG = {
       appId: '1:589698327361:web:bc5c88e990afd124bf37c0'
     },
     appCheck: {
-      enabled: true,
-      siteKey: '6LcneYUsAAAAAEHJc5Fg9fNWxkeyZejEv_awMQwB',
+      enabled: false,
+      siteKey: '',
       debugToken: ''
     }
   }
