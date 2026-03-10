@@ -1293,7 +1293,7 @@ function renderUnsoldRow(item) {
 function applySummary(summary, lastUpdated) {
   soldProfitValue.textContent = formatYen(summary.soldProfit);
   soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
-  unsoldCostValue.textContent = formatSignedYen(summary.unsoldProfit);
+  unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
   unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
   overallNetValue.textContent = formatSignedYen(summary.overallNet);
   overallNetValue.style.color = summary.overallNet < 0 ? '#9f3f3f' : '#1f6a52';
