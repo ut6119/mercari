@@ -15,6 +15,8 @@ const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
 const FIREBASE_ARCHIVE_COLLECTION = FIREBASE_OPTIONS.archiveCollection || 'mercari_archives';
+const FIREBASE_TRANSPORT_LEDGER_DOC = FIREBASE_OPTIONS.transportLedgerDoc || 'transport_ledger';
+const FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION = FIREBASE_OPTIONS.transportLedgerSubcollection || 'items';
 const FIREBASE_SDK_VERSION = '10.12.5';
 const FIREBASE_APP_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-app-compat.js';
 const FIREBASE_FIRESTORE_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-firestore-compat.js';
@@ -36,6 +38,7 @@ const ADD_BUTTON_PEEK_ANIM_MAX_MS = 2000;
 let backendMode = 'gas';
 let firebaseDb = null;
 let firebaseItemsCollection = null;
+let firebaseTransportLedgerCollection = null;
 let firebaseItemsCache = [];
 let authFirebaseApp = null;
 let firebaseAuth = null;
@@ -141,6 +144,7 @@ const selectedTransportLedgerIds = new Set();
 const transportHistoryPast = [];
 const transportHistoryFuture = [];
 const TRANSPORT_HISTORY_LIMIT = 40;
+let transportLedgerSyncUnsubscribe = null;
 let addButtonPeekTimer = null;
 let addButtonPeekInitialized = false;
 
@@ -157,6 +161,7 @@ async function init() {
   await ensureFirebaseSdk_();
   await initializeAuth_();
   await initializeBackend();
+  await initializeTransportLedger_();
   bindEvents();
   startAddButtonPeek_();
   renderTransportLedger_();
@@ -283,6 +288,10 @@ async function initializeBackend() {
   firebaseDb = window.firebase.firestore(app);
   void enableFirestorePersistence_(firebaseDb);
   firebaseItemsCollection = firebaseDb.collection(FIREBASE_COLLECTION);
+  firebaseTransportLedgerCollection = firebaseDb
+    .collection(FIREBASE_ARCHIVE_COLLECTION)
+    .doc(FIREBASE_TRANSPORT_LEDGER_DOC)
+    .collection(FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION);
   backendMode = 'firebase';
 }
 
@@ -586,7 +595,7 @@ function bindEvents() {
           place: place
         });
         transportHistoryFuture.length = 0;
-        saveTransportLedger_();
+        await persistTransportLedger_();
         renderTransportLedger_();
         transportLedgerForm.reset();
         applyTransportLedgerPreset_('');
@@ -1092,7 +1101,7 @@ async function handleTransportLedgerAction_(action) {
       transportLedger = transportLedger.filter(function(entry) {
         return !idSet.has(String(entry.id || '').trim());
       });
-      saveTransportLedger_();
+      await persistTransportLedger_();
       setTransportSelectionMode_(false);
       if (currentData && currentData.summary) {
         applySummary(currentData.summary, currentData.lastUpdated);
@@ -1114,7 +1123,7 @@ async function handleTransportUndo_() {
     transportLedger = (Array.isArray(snapshot) ? snapshot : [])
       .map(normalizeTransportLedgerEntry_)
       .filter(Boolean);
-    saveTransportLedger_();
+    await persistTransportLedger_();
     setTransportSelectionMode_(false);
     if (currentData && currentData.summary) {
       applySummary(currentData.summary, currentData.lastUpdated);
@@ -1135,7 +1144,7 @@ async function handleTransportRedo_() {
     transportLedger = (Array.isArray(snapshot) ? snapshot : [])
       .map(normalizeTransportLedgerEntry_)
       .filter(Boolean);
-    saveTransportLedger_();
+    await persistTransportLedger_();
     setTransportSelectionMode_(false);
     if (currentData && currentData.summary) {
       applySummary(currentData.summary, currentData.lastUpdated);
@@ -1350,6 +1359,114 @@ function saveTransportLedger_() {
   } catch (_error) {
     // Ignore storage errors.
   }
+}
+
+async function initializeTransportLedger_() {
+  if (backendMode !== 'firebase' || !firebaseTransportLedgerCollection) {
+    return;
+  }
+  try {
+    const localEntries = transportLedger
+      .map(normalizeTransportLedgerEntry_)
+      .filter(Boolean);
+    const snapshot = await firebaseTransportLedgerCollection.get();
+    const remoteEntries = snapshot.docs
+      .map(function(doc) {
+        return normalizeTransportLedgerEntry_(Object.assign({}, doc.data() || {}, { id: doc.id }));
+      })
+      .filter(Boolean);
+    const mergedEntries = mergeTransportLedgers_(remoteEntries, localEntries);
+    transportLedger = mergedEntries;
+    saveTransportLedger_();
+    if (mergedEntries.length !== remoteEntries.length) {
+      await replaceFirebaseTransportLedger_();
+    }
+  } catch (error) {
+    console.warn('transport ledger init fallback to local cache:', error);
+  }
+  startTransportLedgerSync_();
+}
+
+function startTransportLedgerSync_() {
+  if (backendMode !== 'firebase' || !firebaseTransportLedgerCollection) return;
+  if (transportLedgerSyncUnsubscribe) return;
+
+  transportLedgerSyncUnsubscribe = firebaseTransportLedgerCollection.onSnapshot(function(snapshot) {
+    transportLedger = snapshot.docs
+      .map(function(doc) {
+        return normalizeTransportLedgerEntry_(Object.assign({}, doc.data() || {}, { id: doc.id }));
+      })
+      .filter(Boolean);
+    saveTransportLedger_();
+    renderTransportLedger_();
+    if (currentData && currentData.summary) {
+      applySummary(currentData.summary, currentData.lastUpdated);
+    }
+  }, function(error) {
+    console.warn('transport ledger sync error:', error);
+  });
+}
+
+async function persistTransportLedger_() {
+  saveTransportLedger_();
+  if (backendMode !== 'firebase' || !firebaseTransportLedgerCollection || !firebaseDb) {
+    return;
+  }
+  await replaceFirebaseTransportLedger_();
+}
+
+async function replaceFirebaseTransportLedger_() {
+  const snapshot = await firebaseTransportLedgerCollection.get();
+  const nextEntries = transportLedger
+    .map(normalizeTransportLedgerEntry_)
+    .filter(Boolean);
+  transportLedger = nextEntries;
+  const nextIdSet = new Set();
+  const batch = firebaseDb.batch();
+  const now = Date.now();
+
+  nextEntries.forEach(function(entry) {
+    const id = String(entry.id || '').trim() || createTransportLedgerId_();
+    nextIdSet.add(id);
+    batch.set(firebaseTransportLedgerCollection.doc(id), {
+      date: entry.date,
+      amount: sanitizeAmount_(entry.amount),
+      place: String(entry.place || '').trim(),
+      updatedAtMs: now
+    }, { merge: true });
+  });
+
+  snapshot.docs.forEach(function(doc) {
+    if (!nextIdSet.has(doc.id)) {
+      batch.delete(doc.ref);
+    }
+  });
+
+  if (nextEntries.length === 0 && snapshot.empty) {
+    return;
+  }
+  await batch.commit();
+}
+
+function mergeTransportLedgers_(remoteEntries, localEntries) {
+  const merged = new Map();
+  const order = []
+    .concat(Array.isArray(remoteEntries) ? remoteEntries : [])
+    .concat(Array.isArray(localEntries) ? localEntries : []);
+
+  order.forEach(function(entry) {
+    const normalized = normalizeTransportLedgerEntry_(entry);
+    if (!normalized) return;
+    const id = String(normalized.id || '').trim();
+    if (!id) return;
+    if (!merged.has(id)) {
+      merged.set(id, normalized);
+      return;
+    }
+    merged.set(id, normalized);
+  });
+
+  return Array.from(merged.values());
 }
 
 function normalizeTransportLedgerEntry_(entry) {

@@ -9,6 +9,8 @@ window.APP_RUNTIME_CONFIG = {
     enabled: true,
     collection: 'mercari_items',
     archiveCollection: 'mercari_archives',
+    transportLedgerDoc: 'transport_ledger',
+    transportLedgerSubcollection: 'items',
     config: {
       apiKey: FIREBASE_WEB_API_KEY,
       authDomain: 'mercari-9bbd3.firebaseapp.com',

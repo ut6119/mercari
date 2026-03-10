@@ -917,6 +917,8 @@
           enabled: false,
           collection: 'mercari_items',
           archiveCollection: 'mercari_archives',
+          transportLedgerDoc: 'transport_ledger',
+          transportLedgerSubcollection: 'items',
           config: {
             apiKey: 'REPLACE_WITH_FIREBASE_API_KEY',
             authDomain: '',
@@ -947,6 +949,8 @@
             : defaultConfig.firebase.enabled,
           collection: runtimeFirebase.collection || defaultConfig.firebase.collection,
           archiveCollection: runtimeFirebase.archiveCollection || defaultConfig.firebase.archiveCollection,
+          transportLedgerDoc: runtimeFirebase.transportLedgerDoc || defaultConfig.firebase.transportLedgerDoc,
+          transportLedgerSubcollection: runtimeFirebase.transportLedgerSubcollection || defaultConfig.firebase.transportLedgerSubcollection,
           config: {
             apiKey: runtimeFirebaseConfig.apiKey || defaultConfig.firebase.config.apiKey,
             authDomain: runtimeFirebaseConfig.authDomain || defaultConfig.firebase.config.authDomain,
