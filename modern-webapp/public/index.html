@@ -262,8 +262,29 @@
       .form-grid { display: grid; gap: 12px; margin-top: 18px; }
       .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
       .field input { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; background: #fff; }
+      .field input[readonly] { background: #f2f5fb; color: #44526f; }
       .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       .quick-add-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+      .transport-switch {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .transport-button {
+        padding: 7px 12px;
+        border-radius: 999px;
+        border: 1px solid #c8d6ee;
+        background: #eef4ff;
+        color: #22457e;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .transport-button.active {
+        background: #2467da;
+        border-color: #2467da;
+        color: #fff;
+      }
 
       .bulk-toolbar {
         display: flex;
@@ -610,6 +631,17 @@
               <div class="field">
                 <label for="shippingInput">送料</label>
                 <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
+              </div>
+              <div class="field">
+                <label for="transportInput">交通費</label>
+                <div class="transport-switch" id="transportSwitch">
+                  <button class="transport-button active" type="button" data-transport-preset="tennoji">天王寺 580</button>
+                  <button class="transport-button" type="button" data-transport-preset="namba">なんば 580</button>
+                  <button class="transport-button" type="button" data-transport-preset="umeda">梅田 680</button>
+                  <button class="transport-button" type="button" data-transport-preset="other">その他</button>
+                </div>
+                <input id="transportInput" name="transport" type="number" min="0" step="1" value="580" readonly>
+                <p class="quick-add-note">交通費は原価に自動加算されます。</p>
               </div>
               <button class="button button-primary" id="addButton" type="submit">追加する</button>
             </form>

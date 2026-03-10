@@ -58,6 +58,8 @@ const unsoldToolbar = document.getElementById('unsoldToolbar');
 const quickAddForm = document.getElementById('quickAddForm');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
+const transportSwitch = document.getElementById('transportSwitch');
+const transportInput = document.getElementById('transportInput');
 const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
 const homeView = document.getElementById('homeView');
 const monthlyView = document.getElementById('monthlyView');
@@ -90,6 +92,13 @@ const pendingBottomByStatus = {
 const historyPast = [];
 const historyFuture = [];
 const HISTORY_LIMIT = 40;
+const TRANSPORT_PRESET_VALUES = {
+  tennoji: 580,
+  namba: 580,
+  umeda: 680,
+  other: null
+};
+let selectedTransportPreset = 'tennoji';
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -378,6 +387,19 @@ function bindEvents() {
     });
   });
 
+  if (transportSwitch) {
+    transportSwitch.addEventListener('click', function(event) {
+      const button = event.target.closest('button[data-transport-preset]');
+      if (!button) return;
+      const preset = String(button.dataset.transportPreset || '').trim();
+      applyTransportPreset_(preset, { keepCustom: true });
+      if (preset === 'other' && transportInput) {
+        transportInput.focus();
+      }
+    });
+  }
+  applyTransportPreset_(selectedTransportPreset);
+
   document.querySelectorAll('[data-status-tab]').forEach(function(button) {
     button.addEventListener('click', function() {
       draftStatus = button.dataset.statusTab;
@@ -418,12 +440,14 @@ function bindEvents() {
 
   quickAddForm.addEventListener('submit', async function(event) {
     event.preventDefault();
+    const transportCost = getQuickAddTransportAmount_();
+    const baseCost = sanitizeAmount_(quickAddForm.cost.value);
     const payload = {
       status: draftStatus,
       name: quickAddForm.name.value.trim(),
       revenue: revenueInput.value,
       shipping: shippingInput.value,
-      cost: quickAddForm.cost.value
+      cost: String(baseCost + transportCost)
     };
     await runApi(async function() {
       const data = await request('/api/items', {
@@ -436,6 +460,7 @@ function bindEvents() {
       }
       quickAddForm.reset();
       shippingInput.value = '160';
+      applyTransportPreset_('tennoji');
       document.querySelector('[data-status-tab="unsold"]').click();
       render(data);
       scrollToItemRowAndAnimate_(addedItemId, payload.status, 10, addButton);
@@ -871,7 +896,7 @@ async function refreshDashboardInBackground_() {
     const active = document.activeElement;
     const editingNow = Boolean(
       active &&
-      (active.matches('[data-field]') || active.matches('#nameInput, #revenueInput, #costInput, #shippingInput'))
+      (active.matches('[data-field]') || active.matches('#nameInput, #revenueInput, #costInput, #shippingInput, #transportInput'))
     );
     if (editingNow || pending) {
       return;
@@ -880,6 +905,38 @@ async function refreshDashboardInBackground_() {
   } catch (_error) {
     // Keep showing cached data when background refresh fails.
   }
+}
+
+function applyTransportPreset_(preset, options) {
+  const opts = options || {};
+  const candidate = String(preset || '').trim().toLowerCase();
+  const normalizedPreset = Object.prototype.hasOwnProperty.call(TRANSPORT_PRESET_VALUES, candidate)
+    ? candidate
+    : 'tennoji';
+  selectedTransportPreset = normalizedPreset;
+
+  document.querySelectorAll('[data-transport-preset]').forEach(function(button) {
+    button.classList.toggle('active', button.dataset.transportPreset === normalizedPreset);
+  });
+
+  if (!transportInput) return;
+  if (normalizedPreset === 'other') {
+    transportInput.readOnly = false;
+    transportInput.placeholder = '0';
+    if (!opts.keepCustom) {
+      transportInput.value = '';
+    }
+    return;
+  }
+
+  transportInput.readOnly = true;
+  transportInput.placeholder = '';
+  transportInput.value = String(TRANSPORT_PRESET_VALUES[normalizedPreset] || 0);
+}
+
+function getQuickAddTransportAmount_() {
+  if (!transportInput) return 0;
+  return sanitizeAmount_(transportInput.value);
 }
 
 async function request(url, options) {
