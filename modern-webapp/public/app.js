@@ -637,6 +637,13 @@ async function initializeAuth_() {
 
   const app = getOrCreateFirebaseApp_(config);
   firebaseAuth = window.firebase.auth(app);
+  if (window.firebase && window.firebase.auth && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
+    try {
+      await firebaseAuth.setPersistence(window.firebase.auth.Auth.Persistence.LOCAL);
+    } catch (error) {
+      console.warn('Auth persistence setup failed:', error);
+    }
+  }
   firebaseAuth.onAuthStateChanged(function(user) {
     signedInUser = user || null;
     if (!user) {
@@ -658,12 +665,35 @@ async function initializeAuth_() {
   });
 
   try {
-    await firebaseAuth.getRedirectResult();
+    const redirectResult = await firebaseAuth.getRedirectResult();
+    if (redirectResult && redirectResult.user) {
+      signedInUser = redirectResult.user;
+      try {
+        signedInIdToken = String(await redirectResult.user.getIdToken() || '');
+      } catch (_error) {
+        signedInIdToken = '';
+      }
+      const email = String(redirectResult.user.email || '').trim();
+      updateAuthUi_(email ? ('認証: ' + email) : '認証: ログイン済み');
+      void syncDataScopeForAuth_({ suppressToast: true });
+    }
   } catch (error) {
     const code = String(error && error.code ? error.code : '').trim();
     if (code !== 'auth/no-auth-event') {
       showToast(mapFirebaseAuthError_(error).message || 'ログインに失敗しました。');
     }
+  }
+
+  if (!signedInUser && firebaseAuth.currentUser) {
+    signedInUser = firebaseAuth.currentUser;
+    try {
+      signedInIdToken = String(await firebaseAuth.currentUser.getIdToken() || '');
+    } catch (_error) {
+      signedInIdToken = '';
+    }
+    const email = String(firebaseAuth.currentUser.email || '').trim();
+    updateAuthUi_(email ? ('認証: ' + email) : '認証: ログイン済み');
+    void syncDataScopeForAuth_({ suppressToast: true });
   }
 
 }
