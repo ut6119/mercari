@@ -138,6 +138,13 @@ const monthlySoldToolbar = document.getElementById('monthlySoldToolbar');
 const monthlySoldCountLabel = document.getElementById('monthlySoldCountLabel');
 const monthlySoldSelectedCount = document.getElementById('monthlySoldSelectedCount');
 const monthlyChart = document.getElementById('monthlyChart');
+const aiChatFab = document.getElementById('aiChatFab');
+const aiChatModal = document.getElementById('aiChatModal');
+const aiChatBody = document.getElementById('aiChatBody');
+const aiChatForm = document.getElementById('aiChatForm');
+const aiChatInput = document.getElementById('aiChatInput');
+const sendAiChatButton = document.getElementById('sendAiChatButton');
+const closeAiChatButton = document.getElementById('closeAiChatButton');
 const soldUndoButton = document.getElementById('soldUndoButton');
 const soldRedoButton = document.getElementById('soldRedoButton');
 const unsoldUndoButton = document.getElementById('unsoldUndoButton');
@@ -184,6 +191,7 @@ let addButtonPeekInitialized = false;
 let archiveCancelEnabled = false;
 let monthlySelectionMode = false;
 const selectedMonthlyItemIds = new Set();
+const aiChatMessages = [];
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -300,6 +308,10 @@ function activateView_(viewName) {
   if (homeView) homeView.classList.toggle('active', target === 'home');
   if (monthlyView) monthlyView.classList.toggle('active', target === 'monthly');
   if (chartView) chartView.classList.toggle('active', target === 'chart');
+  updateAiChatFabVisibility_(target);
+  if (target !== 'chart') {
+    closeAiChatModal_();
+  }
 }
 
 function getFirebaseScopedUserId_() {
@@ -923,6 +935,29 @@ function bindEvents() {
       openTransportPresetModal_();
     });
   }
+  if (aiChatFab) {
+    aiChatFab.addEventListener('click', function() {
+      openAiChatModal_();
+    });
+  }
+  if (closeAiChatButton) {
+    closeAiChatButton.addEventListener('click', function() {
+      closeAiChatModal_();
+    });
+  }
+  if (aiChatModal) {
+    aiChatModal.addEventListener('click', function(event) {
+      if (event.target === aiChatModal) {
+        closeAiChatModal_();
+      }
+    });
+  }
+  if (aiChatForm) {
+    aiChatForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      void sendAiChatMessage_();
+    });
+  }
   if (closeTransportPresetModalButton) {
     closeTransportPresetModalButton.addEventListener('click', function() {
       closeTransportPresetModal_();
@@ -962,6 +997,10 @@ function bindEvents() {
   }
   document.addEventListener('keydown', function(event) {
     if (event.key !== 'Escape') return;
+    if (aiChatModal && aiChatModal.classList.contains('open')) {
+      closeAiChatModal_();
+      return;
+    }
     if (transportPresetModal && transportPresetModal.classList.contains('open')) {
       closeTransportPresetModal_();
       return;
@@ -2167,6 +2206,140 @@ function applyTransportLedgerPreset_(preset) {
   transportPlaceInput.readOnly = true;
   transportPlaceInput.placeholder = '';
   transportPlaceInput.value = getTransportPresetLabel_(normalizedPreset);
+}
+
+function updateAiChatFabVisibility_(viewName) {
+  if (!aiChatFab) return;
+  const target = String(viewName || '').trim().toLowerCase();
+  const visible = target === 'chart';
+  aiChatFab.classList.toggle('hidden', !visible);
+}
+
+function openAiChatModal_() {
+  if (!aiChatModal) return;
+  const analysis = buildSedoriAnalysis_();
+  if (!aiChatMessages.length) {
+    appendAiChatMessage_('assistant', buildAiChatWelcomeMessage_(analysis));
+  }
+  renderAiChatMessages_();
+  aiChatModal.classList.add('open');
+  aiChatModal.setAttribute('aria-hidden', 'false');
+  if (aiChatInput) {
+    aiChatInput.focus();
+  }
+}
+
+function closeAiChatModal_() {
+  if (!aiChatModal) return;
+  aiChatModal.classList.remove('open');
+  aiChatModal.setAttribute('aria-hidden', 'true');
+}
+
+function appendAiChatMessage_(role, text) {
+  const normalizedRole = role === 'user' ? 'user' : 'assistant';
+  const body = String(text || '').trim();
+  if (!body) return;
+  aiChatMessages.push({
+    role: normalizedRole,
+    text: body
+  });
+  while (aiChatMessages.length > 48) {
+    aiChatMessages.shift();
+  }
+}
+
+function renderAiChatMessages_() {
+  if (!aiChatBody) return;
+  if (!aiChatMessages.length) {
+    aiChatBody.innerHTML = '<p class="monthly-empty">メッセージがありません。</p>';
+    return;
+  }
+  aiChatBody.innerHTML = aiChatMessages.map(function(message) {
+    const roleClass = message.role === 'user' ? 'user' : 'assistant';
+    return '<div class="ai-chat-row ' + roleClass + '">' + escapeHtml(message.text) + '</div>';
+  }).join('');
+  aiChatBody.scrollTop = aiChatBody.scrollHeight;
+}
+
+async function sendAiChatMessage_() {
+  const text = aiChatInput ? String(aiChatInput.value || '').trim() : '';
+  if (!text) return;
+  appendAiChatMessage_('user', text);
+  if (aiChatInput) {
+    aiChatInput.value = '';
+  }
+  renderAiChatMessages_();
+
+  const analysis = buildSedoriAnalysis_();
+  const reply = buildSedoriAiChatReply_(text, analysis);
+  appendAiChatMessage_('assistant', reply);
+  renderAiChatMessages_();
+}
+
+function buildAiChatWelcomeMessage_(analysis) {
+  if (!analysis || !analysis.hasData) {
+    return 'メルカリせどり専用AIです（無料運用）。\n売上データが増えると、利益率を上げる具体策を即時で提案できます。';
+  }
+  const stats = analysis.stats || {};
+  return 'メルカリせどり専用AIです（無料運用）。\n'
+    + '現状: 利益率 ' + formatPercent(stats.margin) + ' / 赤字率 ' + formatPercent(stats.negativeRate) + ' / 平均売価 ' + formatYen(Math.round(stats.avgRevenue)) + '\n'
+    + '質問例: 「利益率を5%上げるには？」';
+}
+
+function buildSedoriAiChatReply_(userMessage, analysis) {
+  const text = String(userMessage || '').trim();
+  const lower = text.toLowerCase();
+  if (!analysis || !analysis.hasData) {
+    return '分析対象データが少ないので、まず販売済みデータを追加してください。\n'
+      + '目安: 10件以上あると精度が上がります。';
+  }
+  const stats = analysis.stats || {};
+  const recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
+  const top = recommendations[0] || null;
+  const second = recommendations[1] || null;
+  const baseLine = '現状: 利益率 ' + formatPercent(stats.margin)
+    + ' / 赤字率 ' + formatPercent(stats.negativeRate)
+    + ' / 平均売価 ' + formatYen(Math.round(stats.avgRevenue)) + '。';
+
+  if (/^(hi|hello|こんにちは|こんばんは|おはよう)/i.test(text)) {
+    return '了解です。' + baseLine + '\n'
+      + (top ? '最優先は「' + top.title + '」です。' : 'まず現状データを元に改善点を抽出します。');
+  }
+  if (lower.includes('利益率') || lower.includes('上げ')) {
+    return baseLine + '\n'
+      + (top ? '1. ' + top.action + '\n' : '')
+      + (second ? '2. ' + second.action + '\n' : '')
+      + '3. 出品前に「売価-10%-送料-原価-交通費」で必ず粗利を確認。';
+  }
+  if (lower.includes('赤字') || lower.includes('損切')) {
+    return '赤字対策の優先順です。\n'
+      + '1. 直近30日で赤字商品を抽出し、仕入れ基準から除外。\n'
+      + '2. 再出品は値下げではなく、写真/タイトル改善→24時間反応確認。\n'
+      + '3. 在庫圧縮が必要なら、最低利益0円で早期回転。';
+  }
+  if (lower.includes('仕入') || lower.includes('リサーチ')) {
+    return '仕入れ基準はこの3点で回してください。\n'
+      + '1. 想定売価に対して仕入れ上限55%以下。\n'
+      + '2. 送料込みでも利益率20%以上。\n'
+      + '3. 30日内の売り切れ履歴が複数ある商品だけ仕入れ。';
+  }
+  if (lower.includes('送料') || lower.includes('梱包')) {
+    return '送料改善の実務策です。\n'
+      + '1. 梱包サイズを1段階下げられる商品群を先に出品。\n'
+      + '2. 同梱可能な商品はセット化して配送回数を削減。\n'
+      + '3. 厚みが出る商品は説明文で圧縮梱包OKを明記。';
+  }
+  if (lower.includes('交通費')) {
+    return '交通費は「1件あたり」で管理すると改善しやすいです。\n'
+      + '現状目安: 1件あたり ' + formatYen(Math.round(stats.transportPerItem || 0)) + '\n'
+      + '1回の仕入れで出品件数を増やし、交通費率を下げてください。';
+  }
+
+  return '質問ありがとうございます。\n'
+    + baseLine + '\n'
+    + (top ? '最優先: ' + top.title + '。' : '')
+    + (top ? top.action + '\n' : '')
+    + (second ? '次点: ' + second.action : '次に、赤字商品の共通点を洗い出して仕入れ条件へ反映してください。');
 }
 
 function getQuickAddTransportAmount_() {
@@ -3388,7 +3561,7 @@ function togglePending(isPending) {
   const transportButtons = Array.from(document.querySelectorAll('[data-transport-action]'));
   const monthlyButtons = Array.from(document.querySelectorAll('[data-monthly-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
-  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton]
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton, aiChatFab, closeAiChatButton, sendAiChatButton]
     .concat(viewTabs, bulkButtons, transportButtons, monthlyButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;
@@ -3557,6 +3730,7 @@ function renderMonthlyChart_() {
 
   const stats = analysis.stats;
   const recommendations = analysis.recommendations;
+  const summary = buildSedoriExecutiveSummary_(analysis);
   const scopeText = '分析対象: ' + analysis.scopeLabel;
   const kpiHtml = ''
     + '<div class="analysis-grid">'
@@ -3576,6 +3750,14 @@ function renderMonthlyChart_() {
     + '    <div class="analysis-kpi-note">' + scopeText + '</div>'
     + '  </div>'
     + '</div>';
+  const summaryHtml = ''
+    + '<article class="analysis-card analysis-summary">'
+    + '  <div class="analysis-card-head">'
+    + '    <div class="analysis-card-title">AI総評</div>'
+    + '    <span class="analysis-priority">せどりプロ視点</span>'
+    + '  </div>'
+    + '  <div class="analysis-card-note">' + escapeHtml(summary) + '</div>'
+    + '</article>';
 
   const listHtml = recommendations.map(function(rec) {
     const priorityClass = rec.priority === 'high' ? 'analysis-priority high' : 'analysis-priority';
@@ -3590,7 +3772,7 @@ function renderMonthlyChart_() {
       + '</article>';
   }).join('');
 
-  monthlyChart.innerHTML = kpiHtml + '<div class="analysis-list">' + listHtml + '</div>';
+  monthlyChart.innerHTML = kpiHtml + summaryHtml + '<div class="analysis-list">' + listHtml + '</div>';
 }
 
 function buildSedoriAnalysis_() {
@@ -3603,7 +3785,7 @@ function buildSedoriAnalysis_() {
       recommendations: []
     };
   }
-  const stats = summarizeSedoriAnalysisItems_(items);
+  const stats = withSedoriDerivedMetrics_(summarizeSedoriAnalysisItems_(items));
   return {
     hasData: true,
     scopeLabel: buildSedoriAnalysisScopeLabel_(items),
@@ -3660,6 +3842,25 @@ function summarizeSedoriAnalysisItems_(items) {
   });
 }
 
+function withSedoriDerivedMetrics_(rawStats) {
+  const stats = Object.assign({}, rawStats);
+  const totalRevenue = Number(stats.totalRevenue || 0);
+  const totalProfit = Number(stats.totalProfit || 0);
+  const totalShipping = Number(stats.totalShipping || 0);
+  const totalCost = Number(stats.totalCost || 0);
+  const totalTransport = Number(stats.totalTransport || 0);
+  const count = Number(stats.count || 0);
+  const negativeCount = Number(stats.negativeCount || 0);
+  stats.margin = totalRevenue > 0 ? totalProfit / totalRevenue : 0;
+  stats.avgRevenue = count > 0 ? totalRevenue / count : 0;
+  stats.negativeRate = count > 0 ? negativeCount / count : 0;
+  stats.shippingRate = totalRevenue > 0 ? totalShipping / totalRevenue : 0;
+  stats.costRate = totalRevenue > 0 ? totalCost / totalRevenue : 0;
+  stats.transportRate = totalRevenue > 0 ? totalTransport / totalRevenue : 0;
+  stats.transportPerItem = count > 0 ? totalTransport / count : 0;
+  return stats;
+}
+
 function buildSedoriAnalysisScopeLabel_(items) {
   const monthSet = new Set();
   items.forEach(function(item) {
@@ -3669,14 +3870,7 @@ function buildSedoriAnalysisScopeLabel_(items) {
 }
 
 function buildSedoriRecommendations_(rawStats) {
-  const stats = Object.assign({}, rawStats);
-  stats.margin = stats.totalRevenue > 0 ? stats.totalProfit / stats.totalRevenue : 0;
-  stats.avgRevenue = stats.count > 0 ? stats.totalRevenue / stats.count : 0;
-  stats.negativeRate = stats.count > 0 ? stats.negativeCount / stats.count : 0;
-  stats.shippingRate = stats.totalRevenue > 0 ? stats.totalShipping / stats.totalRevenue : 0;
-  stats.costRate = stats.totalRevenue > 0 ? stats.totalCost / stats.totalRevenue : 0;
-  stats.transportRate = stats.totalRevenue > 0 ? stats.totalTransport / stats.totalRevenue : 0;
-  stats.transportPerItem = stats.count > 0 ? stats.totalTransport / stats.count : 0;
+  const stats = withSedoriDerivedMetrics_(rawStats);
 
   const avgBaseCost = stats.count > 0
     ? (stats.totalCost + stats.totalShipping + stats.totalTransport) / stats.count
@@ -3749,6 +3943,31 @@ function buildSedoriRecommendations_(rawStats) {
   return recommendations
     .sort(function(a, b) { return b.score - a.score; })
     .slice(0, 4);
+}
+
+function buildSedoriExecutiveSummary_(analysis) {
+  const stats = analysis && analysis.stats ? analysis.stats : null;
+  if (!stats) {
+    return 'データ不足のため、まず販売済みデータを増やしてください。';
+  }
+  const recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
+  const top = recommendations[0] || null;
+  const marginText = formatPercent(stats.margin);
+  const negativeText = formatPercent(stats.negativeRate);
+  if (stats.negativeRate >= 0.15) {
+    return '赤字率 ' + negativeText + ' が高めです。'
+      + '先に損益分岐売価を固定し、赤字を止めることが最優先です。';
+  }
+  if (stats.margin < 0.2) {
+    return '利益率 ' + marginText + ' のため、仕入れ上限を厳格化して粗利の土台を上げる段階です。';
+  }
+  if (stats.margin >= 0.3 && stats.negativeRate <= 0.05) {
+    return '利益率 ' + marginText + ' / 赤字率 ' + negativeText + ' で良好です。'
+      + '高回転カテゴリに在庫を寄せると利益総額を伸ばしやすいです。';
+  }
+  return top
+    ? ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。現状の最優先は「' + top.title + '」です。')
+    : ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。現状を維持しつつ仕入れ精度を上げましょう。');
 }
 
 function getMonthOverMonth_(currentSummary, previousSummary) {

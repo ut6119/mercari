@@ -570,6 +570,117 @@
         color: #a53a50;
       }
       .analysis-card-note { margin-top: 6px; font-size: 12px; color: #435067; line-height: 1.45; }
+      .analysis-caption {
+        margin: 4px 0 0;
+        font-size: 12px;
+        color: #4a5a75;
+      }
+      .analysis-summary {
+        margin-top: 12px;
+        border-color: #c9dafc;
+        background: linear-gradient(135deg, #edf3ff 0%, #f8fbff 100%);
+      }
+      .ai-chat-fab {
+        position: fixed;
+        right: 18px;
+        bottom: 94px;
+        z-index: 82;
+        width: 52px;
+        height: 52px;
+        border-radius: 999px;
+        border: 1px solid rgba(159, 183, 227, 0.9);
+        background: rgba(42, 127, 255, 0.62);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        backdrop-filter: blur(4px);
+        box-shadow: 0 10px 24px rgba(17, 33, 62, 0.24);
+      }
+      .ai-chat-fab.hidden { display: none; }
+      .ai-chat-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 86;
+        background: rgba(20, 28, 42, 0.2);
+        backdrop-filter: blur(2px);
+        display: none;
+        align-items: flex-end;
+        justify-content: flex-end;
+        padding: 14px;
+      }
+      .ai-chat-overlay.open { display: flex; }
+      .ai-chat-card {
+        width: min(420px, calc(100vw - 22px));
+        height: min(70vh, 620px);
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 10px;
+        padding: 12px;
+        border: 1px solid rgba(216, 223, 235, 0.95);
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 18px 36px rgba(16, 32, 58, 0.2);
+      }
+      .ai-chat-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .ai-chat-head h3 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .ai-chat-close {
+        padding: 6px 9px;
+        font-size: 11px;
+      }
+      .ai-chat-log {
+        border: 1px solid #dde6f4;
+        border-radius: 12px;
+        background: #f8faff;
+        padding: 10px;
+        overflow: auto;
+        display: grid;
+        gap: 8px;
+      }
+      .ai-chat-row {
+        max-width: 94%;
+        padding: 8px 10px;
+        border-radius: 10px;
+        font-size: 12px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .ai-chat-row.user {
+        margin-left: auto;
+        background: #e6efff;
+        border: 1px solid #c8dafc;
+        color: #17345f;
+      }
+      .ai-chat-row.assistant {
+        margin-right: auto;
+        background: #ffffff;
+        border: 1px solid #d9e2f0;
+        color: #1f2f4d;
+      }
+      .ai-chat-form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+      .ai-chat-input {
+        border: 1px solid #cdd9ef;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+      .ai-chat-send {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
 
       .toast {
         position: fixed; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 14px;
@@ -674,6 +785,9 @@
         .field-row { grid-template-columns: 1fr; }
         .transport-ledger-form .field-row { grid-template-columns: 1fr; }
         .transport-preset-edit-row { grid-template-columns: 1fr; }
+        .ai-chat-fab { right: 14px; bottom: 88px; width: 48px; height: 48px; font-size: 11px; }
+        .ai-chat-overlay { padding: 10px; }
+        .ai-chat-card { width: calc(100vw - 14px); height: min(72vh, 620px); }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .monthly-summary-grid { grid-template-columns: minmax(0, 1fr); }
         .chart-row { grid-template-columns: 56px 1fr; }
@@ -934,10 +1048,25 @@
       <section class="view-pane" id="chartView">
         <div class="layout">
           <section class="panel">
-            <h2>せどりAI分析</h2>
+            <h2>メルカリせどり専用AI分析</h2>
+            <p class="analysis-caption">無料AIチャット付き: 右下の半透明AIボタンから相談できます。</p>
             <div class="chart-group" id="monthlyChart"></div>
           </section>
         </div>
+      </section>
+    </div>
+    <button class="ai-chat-fab hidden" id="aiChatFab" type="button" aria-label="AIチャットを開く">AI</button>
+    <div class="ai-chat-overlay" id="aiChatModal" aria-hidden="true">
+      <section class="ai-chat-card">
+        <div class="ai-chat-head">
+          <h3>メルカリせどり専用AI</h3>
+          <button class="button button-secondary ai-chat-close" id="closeAiChatButton" type="button">閉じる</button>
+        </div>
+        <div class="ai-chat-log" id="aiChatBody"></div>
+        <form class="ai-chat-form" id="aiChatForm">
+          <input class="ai-chat-input" id="aiChatInput" type="text" maxlength="220" placeholder="例: 利益率を上げる具体策を3つ">
+          <button class="button button-primary ai-chat-send" id="sendAiChatButton" type="submit">送信</button>
+        </form>
       </section>
     </div>
     <div class="modal-overlay" id="transportPresetModal" aria-hidden="true">
@@ -1094,6 +1223,6 @@
         }
       };
     </script>
-    <script src="./app.js?v=20260311-login18"></script>
+    <script src="./app.js?v=20260311-ai01"></script>
   </body>
-  </html>
+</html>
