@@ -523,6 +523,53 @@
       .chart-bar.profit { background: linear-gradient(90deg, #14b8a6, #21cfba); }
       .chart-bar.profit.negative { background: linear-gradient(90deg, #c75268, #df768a); }
       .chart-values { font-size: 12px; color: #3a475f; min-width: 150px; text-align: right; }
+      .analysis-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .analysis-kpi {
+        border: 1px solid #d9e2f0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #fff;
+      }
+      .analysis-kpi-label { font-size: 11px; color: var(--muted); }
+      .analysis-kpi-value { margin-top: 4px; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+      .analysis-kpi-note { margin-top: 4px; font-size: 11px; color: var(--muted); }
+      .analysis-list {
+        margin-top: 12px;
+        display: grid;
+        gap: 10px;
+      }
+      .analysis-card {
+        border: 1px solid #dbe4f3;
+        border-radius: 12px;
+        padding: 11px 12px;
+        background: #fff;
+      }
+      .analysis-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .analysis-card-title { font-size: 13px; font-weight: 800; color: #1f2f4d; }
+      .analysis-priority {
+        font-size: 10px;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: 3px 8px;
+        border: 1px solid #c8dafc;
+        background: #eaf1ff;
+        color: #1f4b99;
+      }
+      .analysis-priority.high {
+        border-color: #f4c9cf;
+        background: #fdecef;
+        color: #a53a50;
+      }
+      .analysis-card-note { margin-top: 6px; font-size: 12px; color: #435067; line-height: 1.45; }
 
       .toast {
         position: fixed; right: 16px; bottom: 16px; padding: 14px 16px; border-radius: 14px;
@@ -691,7 +738,7 @@
       <div class="view-tabs" id="viewTabs">
         <button class="view-tab active" type="button" data-view-tab="home">ホーム</button>
         <button class="view-tab" type="button" data-view-tab="monthly">月別</button>
-        <button class="view-tab" type="button" data-view-tab="chart">棒グラフ</button>
+        <button class="view-tab" type="button" data-view-tab="chart">AI分析</button>
       </div>
 
       <section class="view-pane active" id="homeView">
@@ -887,11 +934,7 @@
       <section class="view-pane" id="chartView">
         <div class="layout">
           <section class="panel">
-            <h2>月別棒グラフ</h2>
-            <div class="chart-legend">
-              <span><span class="chart-legend-dot" style="background:#2a7fff;"></span>利益</span>
-              <span><span class="chart-legend-dot" style="background:#14b8a6;"></span>利益率</span>
-            </div>
+            <h2>せどりAI分析</h2>
             <div class="chart-group" id="monthlyChart"></div>
           </section>
         </div>
@@ -1051,6 +1094,6 @@
         }
       };
     </script>
-    <script src="./app.js?v=20260311-login17"></script>
+    <script src="./app.js?v=20260311-login18"></script>
   </body>
   </html>

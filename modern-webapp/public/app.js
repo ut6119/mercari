@@ -118,6 +118,7 @@ const openTransportPresetModalButton = document.getElementById('openTransportPre
 const transportPresetModal = document.getElementById('transportPresetModal');
 const closeTransportPresetModalButton = document.getElementById('closeTransportPresetModalButton');
 const transportPresetForm = document.getElementById('transportPresetForm');
+const saveTransportPresetButton = document.getElementById('saveTransportPresetButton');
 const resetTransportPresetButton = document.getElementById('resetTransportPresetButton');
 const transportPresetTennojiLabelInput = document.getElementById('transportPresetTennojiLabel');
 const transportPresetTennojiAmountInput = document.getElementById('transportPresetTennojiAmount');
@@ -3548,48 +3549,206 @@ function renderMonthlyViews_() {
 
 function renderMonthlyChart_() {
   if (!monthlyChart) return;
-  const months = monthlyState.months;
-  if (!months.length) {
+  const analysis = buildSedoriAnalysis_();
+  if (!analysis.hasData) {
     monthlyChart.innerHTML = '<p class="monthly-empty">データがありません。</p>';
     return;
   }
 
-  const maxProfit = months.reduce(function(max, entry) {
-    const summary = entry.summary || {};
-    return Math.max(max, Math.abs(Number(summary.soldProfit || 0)));
-  }, 1);
-  const maxMargin = months.reduce(function(max, entry) {
-    const summary = entry.summary || {};
-    return Math.max(max, Math.abs(Number(summary.soldMargin || 0)));
-  }, 1);
+  const stats = analysis.stats;
+  const recommendations = analysis.recommendations;
+  const scopeText = '分析対象: ' + analysis.scopeLabel;
+  const kpiHtml = ''
+    + '<div class="analysis-grid">'
+    + '  <div class="analysis-kpi">'
+    + '    <div class="analysis-kpi-label">直近利益率</div>'
+    + '    <div class="analysis-kpi-value">' + formatPercent(stats.margin) + '</div>'
+    + '    <div class="analysis-kpi-note">利益 ' + formatSignedYen(stats.totalProfit) + '</div>'
+    + '  </div>'
+    + '  <div class="analysis-kpi">'
+    + '    <div class="analysis-kpi-label">赤字率</div>'
+    + '    <div class="analysis-kpi-value">' + formatPercent(stats.negativeRate) + '</div>'
+    + '    <div class="analysis-kpi-note">赤字 ' + stats.negativeCount + '件 / 全' + stats.count + '件</div>'
+    + '  </div>'
+    + '  <div class="analysis-kpi">'
+    + '    <div class="analysis-kpi-label">平均売価</div>'
+    + '    <div class="analysis-kpi-value">' + formatYen(Math.round(stats.avgRevenue)) + '</div>'
+    + '    <div class="analysis-kpi-note">' + scopeText + '</div>'
+    + '  </div>'
+    + '</div>';
 
-  monthlyChart.innerHTML = months.map(function(entry) {
-    const summary = entry.summary || {};
-    const soldProfit = Number(summary.soldProfit || 0);
-    const soldMargin = Number(summary.soldMargin || 0);
-    const profitWidth = calcBarWidth_(Math.abs(soldProfit), maxProfit);
-    const marginWidth = calcBarWidth_(Math.abs(soldMargin), maxMargin);
-    const marginClass = soldMargin < 0 ? 'chart-bar profit negative' : 'chart-bar profit';
+  const listHtml = recommendations.map(function(rec) {
+    const priorityClass = rec.priority === 'high' ? 'analysis-priority high' : 'analysis-priority';
     return ''
-      + '<div class="chart-row">'
-      + '  <div class="chart-label">' + escapeHtml(entry.month || '-') + '</div>'
-      + '  <div class="chart-bars">'
-      + '    <div class="chart-bar-track"><div class="chart-bar revenue" style="width:' + profitWidth + '%;"></div></div>'
-      + '    <div class="chart-bar-track"><div class="' + marginClass + '" style="width:' + marginWidth + '%;"></div></div>'
+      + '<article class="analysis-card">'
+      + '  <div class="analysis-card-head">'
+      + '    <div class="analysis-card-title">' + escapeHtml(rec.title) + '</div>'
+      + '    <span class="' + priorityClass + '">' + escapeHtml(rec.priorityLabel) + '</span>'
       + '  </div>'
-      + '  <div class="chart-values">利益 ' + formatSignedYen(soldProfit) + ' / 利益率 ' + formatPercent(summary.soldMargin) + '</div>'
-      + '</div>';
+      + '  <div class="analysis-card-note">' + escapeHtml(rec.reason) + '</div>'
+      + '  <div class="analysis-card-note">' + escapeHtml(rec.action) + '</div>'
+      + '</article>';
   }).join('');
+
+  monthlyChart.innerHTML = kpiHtml + '<div class="analysis-list">' + listHtml + '</div>';
 }
 
-function calcBarWidth_(value, maxValue) {
-  const amount = Number(value || 0);
-  const max = Number(maxValue || 0);
-  if (!Number.isFinite(amount) || !Number.isFinite(max) || amount <= 0 || max <= 0) {
-    return 0;
+function buildSedoriAnalysis_() {
+  const items = collectSedoriAnalysisItems_();
+  if (!items.length) {
+    return {
+      hasData: false,
+      scopeLabel: '',
+      stats: null,
+      recommendations: []
+    };
   }
-  const percent = Math.round((amount / max) * 100);
-  return Math.min(100, Math.max(4, percent));
+  const stats = summarizeSedoriAnalysisItems_(items);
+  return {
+    hasData: true,
+    scopeLabel: buildSedoriAnalysisScopeLabel_(items),
+    stats: stats,
+    recommendations: buildSedoriRecommendations_(stats)
+  };
+}
+
+function collectSedoriAnalysisItems_() {
+  const result = [];
+  const months = Array.isArray(monthlyState.months) ? monthlyState.months.slice() : [];
+  const recentMonths = months.slice(-3);
+  recentMonths.forEach(function(entry) {
+    const month = String(entry && entry.month ? entry.month : '').trim();
+    const soldItems = Array.isArray(entry && entry.soldItems) ? entry.soldItems : [];
+    soldItems.forEach(function(item) {
+      result.push(Object.assign({ sourceMonth: month || '-' }, item));
+    });
+  });
+
+  const currentSold = Array.isArray(currentData && currentData.soldItems) ? currentData.soldItems : [];
+  const currentMonth = getCurrentMonthLabel_();
+  currentSold.forEach(function(item) {
+    result.push(Object.assign({ sourceMonth: currentMonth }, item));
+  });
+  return result;
+}
+
+function summarizeSedoriAnalysisItems_(items) {
+  return items.reduce(function(acc, item) {
+    const revenue = sanitizeAmount_(item && item.revenue);
+    const shipping = sanitizeAmount_(item && item.shipping, DEFAULT_SHIPPING);
+    const cost = sanitizeAmount_(item && item.cost);
+    const transport = sanitizeAmount_(item && item.transport);
+    const profit = Number(item && item.profit ? item.profit : 0);
+    acc.count += 1;
+    acc.totalRevenue += revenue;
+    acc.totalProfit += profit;
+    acc.totalShipping += shipping;
+    acc.totalCost += cost;
+    acc.totalTransport += transport;
+    if (profit < 0) {
+      acc.negativeCount += 1;
+    }
+    return acc;
+  }, {
+    count: 0,
+    totalRevenue: 0,
+    totalProfit: 0,
+    totalShipping: 0,
+    totalCost: 0,
+    totalTransport: 0,
+    negativeCount: 0
+  });
+}
+
+function buildSedoriAnalysisScopeLabel_(items) {
+  const monthSet = new Set();
+  items.forEach(function(item) {
+    monthSet.add(String(item && item.sourceMonth ? item.sourceMonth : '-'));
+  });
+  return monthSet.size + 'か月 / ' + items.length + '件';
+}
+
+function buildSedoriRecommendations_(rawStats) {
+  const stats = Object.assign({}, rawStats);
+  stats.margin = stats.totalRevenue > 0 ? stats.totalProfit / stats.totalRevenue : 0;
+  stats.avgRevenue = stats.count > 0 ? stats.totalRevenue / stats.count : 0;
+  stats.negativeRate = stats.count > 0 ? stats.negativeCount / stats.count : 0;
+  stats.shippingRate = stats.totalRevenue > 0 ? stats.totalShipping / stats.totalRevenue : 0;
+  stats.costRate = stats.totalRevenue > 0 ? stats.totalCost / stats.totalRevenue : 0;
+  stats.transportRate = stats.totalRevenue > 0 ? stats.totalTransport / stats.totalRevenue : 0;
+  stats.transportPerItem = stats.count > 0 ? stats.totalTransport / stats.count : 0;
+
+  const avgBaseCost = stats.count > 0
+    ? (stats.totalCost + stats.totalShipping + stats.totalTransport) / stats.count
+    : 0;
+  const breakEvenPrice = Math.ceil(avgBaseCost / 0.9);
+  const targetMargin = 0.25;
+  const targetPrice = Math.ceil(avgBaseCost / (0.9 - targetMargin));
+
+  const recommendations = [];
+  if (stats.negativeRate >= 0.15) {
+    recommendations.push({
+      score: 95,
+      priority: 'high',
+      priorityLabel: '最優先',
+      title: '赤字商品の基準価格を先に固定',
+      reason: '赤字率が ' + formatPercent(stats.negativeRate) + ' と高めです。',
+      action: '損益分岐売価を ' + formatYen(breakEvenPrice) + ' 以上に固定し、25%利益率なら目標売価は ' + formatYen(targetPrice) + ' です。'
+    });
+  }
+  if (stats.costRate >= 0.58 || stats.margin < 0.2) {
+    recommendations.push({
+      score: 90,
+      priority: 'high',
+      priorityLabel: '最優先',
+      title: '仕入れ上限を売価の55%以内へ',
+      reason: '原価率が ' + formatPercent(stats.costRate) + '、利益率が ' + formatPercent(stats.margin) + ' です。',
+      action: '同じ売価帯なら仕入れを今より10〜15%下げる調達先へ切替すると利益率が改善しやすいです。'
+    });
+  }
+  if (stats.shippingRate >= 0.09) {
+    recommendations.push({
+      score: 75,
+      priority: 'medium',
+      priorityLabel: '重要',
+      title: '送料圧縮で利益率を底上げ',
+      reason: '送料率が ' + formatPercent(stats.shippingRate) + ' です。',
+      action: '梱包サイズ統一と同梱提案で、送料を売価比2pt下げると利益率も約2pt改善します。'
+    });
+  }
+  if (stats.transportPerItem >= 120) {
+    recommendations.push({
+      score: 70,
+      priority: 'medium',
+      priorityLabel: '重要',
+      title: '仕入れ移動コストを案件単位で回収',
+      reason: '交通費が1件あたり平均 ' + formatYen(Math.round(stats.transportPerItem)) + ' です。',
+      action: '同一エリアでまとめ仕入れし、1回あたりの出品件数を増やして交通費率を下げるのが有効です。'
+    });
+  }
+  if (stats.avgRevenue < 1800) {
+    recommendations.push({
+      score: 60,
+      priority: 'medium',
+      priorityLabel: '改善候補',
+      title: '低単価偏重を改善',
+      reason: '平均売価が ' + formatYen(Math.round(stats.avgRevenue)) + ' です。',
+      action: '高単価カテゴリを2割混ぜるだけで、同じ件数でも粗利総額が伸びやすくなります。'
+    });
+  }
+  if (!recommendations.length) {
+    recommendations.push({
+      score: 50,
+      priority: 'medium',
+      priorityLabel: '維持',
+      title: '現状は良好',
+      reason: '利益率と赤字率は安定しています。',
+      action: '同じ基準で仕入れを継続し、回転率が高い商品だけ在庫を厚くする運用がおすすめです。'
+    });
+  }
+  return recommendations
+    .sort(function(a, b) { return b.score - a.score; })
+    .slice(0, 4);
 }
 
 function getMonthOverMonth_(currentSummary, previousSummary) {
