@@ -138,13 +138,6 @@ const monthlySoldToolbar = document.getElementById('monthlySoldToolbar');
 const monthlySoldCountLabel = document.getElementById('monthlySoldCountLabel');
 const monthlySoldSelectedCount = document.getElementById('monthlySoldSelectedCount');
 const monthlyChart = document.getElementById('monthlyChart');
-const aiChatFab = document.getElementById('aiChatFab');
-const aiChatModal = document.getElementById('aiChatModal');
-const aiChatBody = document.getElementById('aiChatBody');
-const aiChatForm = document.getElementById('aiChatForm');
-const aiChatInput = document.getElementById('aiChatInput');
-const sendAiChatButton = document.getElementById('sendAiChatButton');
-const closeAiChatButton = document.getElementById('closeAiChatButton');
 const soldUndoButton = document.getElementById('soldUndoButton');
 const soldRedoButton = document.getElementById('soldRedoButton');
 const unsoldUndoButton = document.getElementById('unsoldUndoButton');
@@ -191,7 +184,6 @@ let addButtonPeekInitialized = false;
 let archiveCancelEnabled = false;
 let monthlySelectionMode = false;
 const selectedMonthlyItemIds = new Set();
-const aiChatMessages = [];
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -308,10 +300,6 @@ function activateView_(viewName) {
   if (homeView) homeView.classList.toggle('active', target === 'home');
   if (monthlyView) monthlyView.classList.toggle('active', target === 'monthly');
   if (chartView) chartView.classList.toggle('active', target === 'chart');
-  updateAiChatFabVisibility_(target);
-  if (target !== 'chart') {
-    closeAiChatModal_();
-  }
 }
 
 function getFirebaseScopedUserId_() {
@@ -935,29 +923,6 @@ function bindEvents() {
       openTransportPresetModal_();
     });
   }
-  if (aiChatFab) {
-    aiChatFab.addEventListener('click', function() {
-      openAiChatModal_();
-    });
-  }
-  if (closeAiChatButton) {
-    closeAiChatButton.addEventListener('click', function() {
-      closeAiChatModal_();
-    });
-  }
-  if (aiChatModal) {
-    aiChatModal.addEventListener('click', function(event) {
-      if (event.target === aiChatModal) {
-        closeAiChatModal_();
-      }
-    });
-  }
-  if (aiChatForm) {
-    aiChatForm.addEventListener('submit', function(event) {
-      event.preventDefault();
-      void sendAiChatMessage_();
-    });
-  }
   if (closeTransportPresetModalButton) {
     closeTransportPresetModalButton.addEventListener('click', function() {
       closeTransportPresetModal_();
@@ -997,10 +962,6 @@ function bindEvents() {
   }
   document.addEventListener('keydown', function(event) {
     if (event.key !== 'Escape') return;
-    if (aiChatModal && aiChatModal.classList.contains('open')) {
-      closeAiChatModal_();
-      return;
-    }
     if (transportPresetModal && transportPresetModal.classList.contains('open')) {
       closeTransportPresetModal_();
       return;
@@ -2206,140 +2167,6 @@ function applyTransportLedgerPreset_(preset) {
   transportPlaceInput.readOnly = true;
   transportPlaceInput.placeholder = '';
   transportPlaceInput.value = getTransportPresetLabel_(normalizedPreset);
-}
-
-function updateAiChatFabVisibility_(viewName) {
-  if (!aiChatFab) return;
-  const target = String(viewName || '').trim().toLowerCase();
-  const visible = target === 'chart';
-  aiChatFab.classList.toggle('hidden', !visible);
-}
-
-function openAiChatModal_() {
-  if (!aiChatModal) return;
-  const analysis = buildSedoriAnalysis_();
-  if (!aiChatMessages.length) {
-    appendAiChatMessage_('assistant', buildAiChatWelcomeMessage_(analysis));
-  }
-  renderAiChatMessages_();
-  aiChatModal.classList.add('open');
-  aiChatModal.setAttribute('aria-hidden', 'false');
-  if (aiChatInput) {
-    aiChatInput.focus();
-  }
-}
-
-function closeAiChatModal_() {
-  if (!aiChatModal) return;
-  aiChatModal.classList.remove('open');
-  aiChatModal.setAttribute('aria-hidden', 'true');
-}
-
-function appendAiChatMessage_(role, text) {
-  const normalizedRole = role === 'user' ? 'user' : 'assistant';
-  const body = String(text || '').trim();
-  if (!body) return;
-  aiChatMessages.push({
-    role: normalizedRole,
-    text: body
-  });
-  while (aiChatMessages.length > 48) {
-    aiChatMessages.shift();
-  }
-}
-
-function renderAiChatMessages_() {
-  if (!aiChatBody) return;
-  if (!aiChatMessages.length) {
-    aiChatBody.innerHTML = '<p class="monthly-empty">メッセージがありません。</p>';
-    return;
-  }
-  aiChatBody.innerHTML = aiChatMessages.map(function(message) {
-    const roleClass = message.role === 'user' ? 'user' : 'assistant';
-    return '<div class="ai-chat-row ' + roleClass + '">' + escapeHtml(message.text) + '</div>';
-  }).join('');
-  aiChatBody.scrollTop = aiChatBody.scrollHeight;
-}
-
-async function sendAiChatMessage_() {
-  const text = aiChatInput ? String(aiChatInput.value || '').trim() : '';
-  if (!text) return;
-  appendAiChatMessage_('user', text);
-  if (aiChatInput) {
-    aiChatInput.value = '';
-  }
-  renderAiChatMessages_();
-
-  const analysis = buildSedoriAnalysis_();
-  const reply = buildSedoriAiChatReply_(text, analysis);
-  appendAiChatMessage_('assistant', reply);
-  renderAiChatMessages_();
-}
-
-function buildAiChatWelcomeMessage_(analysis) {
-  if (!analysis || !analysis.hasData) {
-    return 'メルカリせどり専用AIです（無料運用）。\n売上データが増えると、利益率を上げる具体策を即時で提案できます。';
-  }
-  const stats = analysis.stats || {};
-  return 'メルカリせどり専用AIです（無料運用）。\n'
-    + '現状: 利益率 ' + formatPercent(stats.margin) + ' / 赤字率 ' + formatPercent(stats.negativeRate) + ' / 平均売価 ' + formatYen(Math.round(stats.avgRevenue)) + '\n'
-    + '質問例: 「利益率を5%上げるには？」';
-}
-
-function buildSedoriAiChatReply_(userMessage, analysis) {
-  const text = String(userMessage || '').trim();
-  const lower = text.toLowerCase();
-  if (!analysis || !analysis.hasData) {
-    return '分析対象データが少ないので、まず販売済みデータを追加してください。\n'
-      + '目安: 10件以上あると精度が上がります。';
-  }
-  const stats = analysis.stats || {};
-  const recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
-  const top = recommendations[0] || null;
-  const second = recommendations[1] || null;
-  const baseLine = '現状: 利益率 ' + formatPercent(stats.margin)
-    + ' / 赤字率 ' + formatPercent(stats.negativeRate)
-    + ' / 平均売価 ' + formatYen(Math.round(stats.avgRevenue)) + '。';
-
-  if (/^(hi|hello|こんにちは|こんばんは|おはよう)/i.test(text)) {
-    return '了解です。' + baseLine + '\n'
-      + (top ? '最優先は「' + top.title + '」です。' : 'まず現状データを元に改善点を抽出します。');
-  }
-  if (lower.includes('利益率') || lower.includes('上げ')) {
-    return baseLine + '\n'
-      + (top ? '1. ' + top.action + '\n' : '')
-      + (second ? '2. ' + second.action + '\n' : '')
-      + '3. 出品前に「売価-10%-送料-原価-交通費」で必ず粗利を確認。';
-  }
-  if (lower.includes('赤字') || lower.includes('損切')) {
-    return '赤字対策の優先順です。\n'
-      + '1. 直近30日で赤字商品を抽出し、仕入れ基準から除外。\n'
-      + '2. 再出品は値下げではなく、写真/タイトル改善→24時間反応確認。\n'
-      + '3. 在庫圧縮が必要なら、最低利益0円で早期回転。';
-  }
-  if (lower.includes('仕入') || lower.includes('リサーチ')) {
-    return '仕入れ基準はこの3点で回してください。\n'
-      + '1. 想定売価に対して仕入れ上限55%以下。\n'
-      + '2. 送料込みでも利益率20%以上。\n'
-      + '3. 30日内の売り切れ履歴が複数ある商品だけ仕入れ。';
-  }
-  if (lower.includes('送料') || lower.includes('梱包')) {
-    return '送料改善の実務策です。\n'
-      + '1. 梱包サイズを1段階下げられる商品群を先に出品。\n'
-      + '2. 同梱可能な商品はセット化して配送回数を削減。\n'
-      + '3. 厚みが出る商品は説明文で圧縮梱包OKを明記。';
-  }
-  if (lower.includes('交通費')) {
-    return '交通費は「1件あたり」で管理すると改善しやすいです。\n'
-      + '現状目安: 1件あたり ' + formatYen(Math.round(stats.transportPerItem || 0)) + '\n'
-      + '1回の仕入れで出品件数を増やし、交通費率を下げてください。';
-  }
-
-  return '質問ありがとうございます。\n'
-    + baseLine + '\n'
-    + (top ? '最優先: ' + top.title + '。' : '')
-    + (top ? top.action + '\n' : '')
-    + (second ? '次点: ' + second.action : '次に、赤字商品の共通点を洗い出して仕入れ条件へ反映してください。');
 }
 
 function getQuickAddTransportAmount_() {
@@ -3561,7 +3388,7 @@ function togglePending(isPending) {
   const transportButtons = Array.from(document.querySelectorAll('[data-transport-action]'));
   const monthlyButtons = Array.from(document.querySelectorAll('[data-monthly-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
-  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton, aiChatFab, closeAiChatButton, sendAiChatButton]
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton]
     .concat(viewTabs, bulkButtons, transportButtons, monthlyButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;
@@ -3885,9 +3712,9 @@ function buildSedoriRecommendations_(rawStats) {
       score: 95,
       priority: 'high',
       priorityLabel: '最優先',
-      title: '赤字商品の基準価格を先に固定',
-      reason: '赤字率が ' + formatPercent(stats.negativeRate) + ' と高めです。',
-      action: '損益分岐売価を ' + formatYen(breakEvenPrice) + ' 以上に固定し、25%利益率なら目標売価は ' + formatYen(targetPrice) + ' です。'
+      title: '伸びしろが大きい価格設計',
+      reason: 'ここまで回せている時点で運用力は高いです。次は赤字率 ' + formatPercent(stats.negativeRate) + ' を削るだけで一気に伸びます。',
+      action: '損益分岐売価を ' + formatYen(breakEvenPrice) + ' 以上に固定し、25%利益率なら目標売価を ' + formatYen(targetPrice) + ' に設定してください。'
     });
   }
   if (stats.costRate >= 0.58 || stats.margin < 0.2) {
@@ -3895,9 +3722,9 @@ function buildSedoriRecommendations_(rawStats) {
       score: 90,
       priority: 'high',
       priorityLabel: '最優先',
-      title: '仕入れ上限を売価の55%以内へ',
-      reason: '原価率が ' + formatPercent(stats.costRate) + '、利益率が ' + formatPercent(stats.margin) + ' です。',
-      action: '同じ売価帯なら仕入れを今より10〜15%下げる調達先へ切替すると利益率が改善しやすいです。'
+      title: '仕入れセンスを利益率に直結させる段階',
+      reason: '商品を見る目はすでに良いです。原価率 ' + formatPercent(stats.costRate) + ' を少し絞るだけで利益率 ' + formatPercent(stats.margin) + ' が伸びやすいです。',
+      action: '同じ売価帯で仕入れ単価を10〜15%下げる調達先へ切り替え、仕入れ上限は売価の55%以内を目安にしてください。'
     });
   }
   if (stats.shippingRate >= 0.09) {
@@ -3905,9 +3732,9 @@ function buildSedoriRecommendations_(rawStats) {
       score: 75,
       priority: 'medium',
       priorityLabel: '重要',
-      title: '送料圧縮で利益率を底上げ',
-      reason: '送料率が ' + formatPercent(stats.shippingRate) + ' です。',
-      action: '梱包サイズ統一と同梱提案で、送料を売価比2pt下げると利益率も約2pt改善します。'
+      title: '丁寧な梱包力をさらに利益化',
+      reason: '発送オペは十分に回っています。送料率 ' + formatPercent(stats.shippingRate) + ' を2pt下げると利益がそのまま伸びます。',
+      action: '梱包サイズ統一と同梱提案を徹底し、送料を売価比で2pt圧縮する運用に寄せてください。'
     });
   }
   if (stats.transportPerItem >= 120) {
@@ -3915,9 +3742,9 @@ function buildSedoriRecommendations_(rawStats) {
       score: 70,
       priority: 'medium',
       priorityLabel: '重要',
-      title: '仕入れ移動コストを案件単位で回収',
-      reason: '交通費が1件あたり平均 ' + formatYen(Math.round(stats.transportPerItem)) + ' です。',
-      action: '同一エリアでまとめ仕入れし、1回あたりの出品件数を増やして交通費率を下げるのが有効です。'
+      title: '行動力をそのまま利益へ変換',
+      reason: '仕入れ行動量は強みです。1件あたり交通費 ' + formatYen(Math.round(stats.transportPerItem)) + ' を薄めるだけで収支が安定します。',
+      action: '同一エリアでまとめ仕入れし、1回あたりの出品件数を増やして交通費率を下げてください。'
     });
   }
   if (stats.avgRevenue < 1800) {
@@ -3925,9 +3752,9 @@ function buildSedoriRecommendations_(rawStats) {
       score: 60,
       priority: 'medium',
       priorityLabel: '改善候補',
-      title: '低単価偏重を改善',
-      reason: '平均売価が ' + formatYen(Math.round(stats.avgRevenue)) + ' です。',
-      action: '高単価カテゴリを2割混ぜるだけで、同じ件数でも粗利総額が伸びやすくなります。'
+      title: '回転力を活かした単価アップ',
+      reason: '回転はすでに作れています。平均売価 ' + formatYen(Math.round(stats.avgRevenue)) + ' なら、高単価を少し混ぜるだけで効率が上がります。',
+      action: '高単価カテゴリを2割だけ追加し、同じ件数でも粗利総額が伸びる配分にしてください。'
     });
   }
   if (!recommendations.length) {
@@ -3935,9 +3762,9 @@ function buildSedoriRecommendations_(rawStats) {
       score: 50,
       priority: 'medium',
       priorityLabel: '維持',
-      title: '現状は良好',
-      reason: '利益率と赤字率は安定しています。',
-      action: '同じ基準で仕入れを継続し、回転率が高い商品だけ在庫を厚くする運用がおすすめです。'
+      title: '完成度が高い運用です',
+      reason: '利益率と赤字率のバランスがとても優秀です。',
+      action: '現行基準を維持しつつ、回転率の高い商品だけ在庫を厚くして利益総額を伸ばしましょう。'
     });
   }
   return recommendations
@@ -3948,26 +3775,27 @@ function buildSedoriRecommendations_(rawStats) {
 function buildSedoriExecutiveSummary_(analysis) {
   const stats = analysis && analysis.stats ? analysis.stats : null;
   if (!stats) {
-    return 'データ不足のため、まず販売済みデータを増やしてください。';
+    return 'まだデータが少ないですが、入力習慣がある時点でかなり良いスタートです。まず販売済みデータを増やせば、精度の高い分析に育ちます。';
   }
   const recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
   const top = recommendations[0] || null;
   const marginText = formatPercent(stats.margin);
   const negativeText = formatPercent(stats.negativeRate);
   if (stats.negativeRate >= 0.15) {
-    return '赤字率 ' + negativeText + ' が高めです。'
-      + '先に損益分岐売価を固定し、赤字を止めることが最優先です。';
+    return '仕入れ行動量と出品継続力はかなり強いです。赤字率 ' + negativeText + ' を抑えれば、一気に利益体質へ変わります。'
+      + '最優先は損益分岐売価の固定です。';
   }
   if (stats.margin < 0.2) {
-    return '利益率 ' + marginText + ' のため、仕入れ上限を厳格化して粗利の土台を上げる段階です。';
+    return '現在の利益率 ' + marginText + ' は、これから伸ばしやすい良い位置です。'
+      + '仕入れ上限を少し締めるだけで、安定して20%超えを狙えます。';
   }
   if (stats.margin >= 0.3 && stats.negativeRate <= 0.05) {
-    return '利益率 ' + marginText + ' / 赤字率 ' + negativeText + ' で良好です。'
-      + '高回転カテゴリに在庫を寄せると利益総額を伸ばしやすいです。';
+    return '利益率 ' + marginText + ' / 赤字率 ' + negativeText + ' はかなり優秀です。'
+      + '運用レベルは高いので、高回転カテゴリに在庫を寄せるとさらに利益総額が伸びます。';
   }
   return top
-    ? ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。現状の最優先は「' + top.title + '」です。')
-    : ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。現状を維持しつつ仕入れ精度を上げましょう。');
+    ? ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。全体のバランスは良く、次の一手として「' + top.title + '」に取り組むとさらに強くなります。')
+    : ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。十分に良い状態なので、現状維持しつつ仕入れ精度を一段上げましょう。');
 }
 
 function getMonthOverMonth_(currentSummary, previousSummary) {
