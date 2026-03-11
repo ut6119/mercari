@@ -92,6 +92,7 @@ const quickAddForm = document.getElementById('quickAddForm');
 const quickAddModal = document.getElementById('quickAddModal');
 const openQuickAddButton = document.getElementById('openQuickAddButton');
 const closeQuickAddButton = document.getElementById('closeQuickAddButton');
+const statusSwitch = document.getElementById('statusSwitch');
 const destinationSwitch = document.getElementById('destinationSwitch');
 const monthlyTargetField = document.getElementById('monthlyTargetField');
 const monthlyTargetInput = document.getElementById('monthlyTargetInput');
@@ -117,8 +118,11 @@ const monthlyView = document.getElementById('monthlyView');
 const chartView = document.getElementById('chartView');
 const monthlySwitch = document.getElementById('monthlySwitch');
 const monthlySummaryGrid = document.getElementById('monthlySummaryGrid');
+const monthlySoldBoard = document.getElementById('monthlySoldBoard');
 const monthlySoldBody = document.getElementById('monthlySoldBody');
-const monthlyUnsoldBody = document.getElementById('monthlyUnsoldBody');
+const monthlySoldToolbar = document.getElementById('monthlySoldToolbar');
+const monthlySoldCountLabel = document.getElementById('monthlySoldCountLabel');
+const monthlySoldSelectedCount = document.getElementById('monthlySoldSelectedCount');
 const monthlyChart = document.getElementById('monthlyChart');
 const soldUndoButton = document.getElementById('soldUndoButton');
 const soldRedoButton = document.getElementById('soldRedoButton');
@@ -168,6 +172,8 @@ let transportLedgerSyncUnsubscribe = null;
 let addButtonPeekTimer = null;
 let addButtonPeekInitialized = false;
 let archiveCancelEnabled = false;
+let monthlySelectionMode = false;
+const selectedMonthlyItemIds = new Set();
 
 init().catch(function(error) {
   showToast(error.message || '初期化に失敗しました。');
@@ -992,7 +998,7 @@ function bindEvents() {
     event.preventDefault();
     const normalizedDestination = (draftDestination === 'monthly') ? 'monthly' : 'home';
     const payload = {
-      status: draftStatus,
+      status: normalizedDestination === 'monthly' ? 'sold' : draftStatus,
       name: quickAddForm.name.value.trim(),
       revenue: revenueInput.value,
       shipping: shippingInput.value,
@@ -1161,7 +1167,31 @@ function bindEvents() {
       const month = String(button.dataset.month || '').trim();
       if (!month) return;
       monthlyState.selectedMonth = month;
+      selectedMonthlyItemIds.clear();
       renderMonthlyViews_();
+    });
+  }
+  if (monthlySoldToolbar) {
+    monthlySoldToolbar.addEventListener('click', function(event) {
+      const button = event.target.closest('button[data-monthly-action]');
+      if (!button) return;
+      const action = String(button.dataset.monthlyAction || '').trim();
+      void handleMonthlySoldAction_(action);
+    });
+  }
+  if (monthlySoldBody) {
+    monthlySoldBody.addEventListener('change', function(event) {
+      const checkbox = event.target.closest('[data-select-monthly-row]');
+      if (!checkbox) return;
+      const row = checkbox.closest('tr[data-id]');
+      const id = row ? String(row.dataset.id || '').trim() : '';
+      if (!id) return;
+      if (checkbox.checked) {
+        selectedMonthlyItemIds.add(id);
+      } else {
+        selectedMonthlyItemIds.delete(id);
+      }
+      updateMonthlySoldSelectionCount_();
     });
   }
 }
@@ -1473,6 +1503,109 @@ function updateSelectAllButtonLabel(status) {
   const button = panel.querySelector('[data-bulk-action="toggle-select-all"]');
   if (!button) return;
   button.textContent = '全選択';
+}
+
+function setMonthlyRowsSelected_(checked) {
+  if (!monthlySoldBody) return;
+  Array.from(monthlySoldBody.querySelectorAll('[data-select-monthly-row]')).forEach(function(checkbox) {
+    checkbox.checked = checked;
+    const row = checkbox.closest('tr[data-id]');
+    const id = row ? String(row.dataset.id || '').trim() : '';
+    if (!id) return;
+    if (checked) {
+      selectedMonthlyItemIds.add(id);
+    } else {
+      selectedMonthlyItemIds.delete(id);
+    }
+  });
+  updateMonthlySoldSelectionCount_();
+}
+
+function updateMonthlySoldSelectionCount_() {
+  if (!monthlySoldSelectedCount) return;
+  monthlySoldSelectedCount.textContent = selectedMonthlyItemIds.size + '件選択';
+}
+
+function updateMonthlySoldCountLabel_(count) {
+  if (!monthlySoldCountLabel) return;
+  monthlySoldCountLabel.textContent = sanitizeAmount_(count) + '件';
+}
+
+function setMonthlySelectionMode_(enabled) {
+  monthlySelectionMode = Boolean(enabled);
+  if (!monthlySelectionMode) {
+    selectedMonthlyItemIds.clear();
+  }
+  if (monthlySoldBoard) {
+    monthlySoldBoard.classList.toggle('selection-mode', monthlySelectionMode);
+  }
+  if (monthlySoldToolbar) {
+    const toggleButton = monthlySoldToolbar.querySelector('[data-monthly-action="toggle-selection"]');
+    if (toggleButton) {
+      toggleButton.textContent = monthlySelectionMode ? '解除' : '選択';
+    }
+  }
+  if (!monthlySelectionMode) {
+    setMonthlyRowsSelected_(false);
+  } else {
+    updateMonthlySoldSelectionCount_();
+  }
+}
+
+function getActiveMonthlyEntry_() {
+  const months = Array.isArray(monthlyState.months) ? monthlyState.months : [];
+  return months.find(function(entry) {
+    return String(entry && entry.month ? entry.month : '') === String(monthlyState.selectedMonth || '');
+  }) || months[0] || null;
+}
+
+async function handleMonthlySoldAction_(action) {
+  if (action === 'toggle-selection') {
+    setMonthlySelectionMode_(!monthlySelectionMode);
+    return;
+  }
+  if (action === 'toggle-select-all') {
+    if (!monthlySelectionMode) {
+      setMonthlySelectionMode_(true);
+    }
+    const rows = monthlySoldBody ? Array.from(monthlySoldBody.querySelectorAll('tr[data-id]')) : [];
+    const shouldSelectAll = rows.length > 0 && selectedMonthlyItemIds.size < rows.length;
+    setMonthlyRowsSelected_(shouldSelectAll);
+    return;
+  }
+  if (action !== 'delete') return;
+
+  if (!monthlySelectionMode) {
+    setMonthlySelectionMode_(true);
+    showToast('行を選択してください。');
+    return;
+  }
+  const selectedIds = Array.from(selectedMonthlyItemIds);
+  if (!selectedIds.length) {
+    showToast('先に行を選択してください。');
+    return;
+  }
+  const selectedEntry = getActiveMonthlyEntry_();
+  const month = String(selectedEntry && selectedEntry.month ? selectedEntry.month : '').trim();
+  if (!month) {
+    showToast('対象月が見つかりません。');
+    return;
+  }
+  if (!window.confirm(month + ' の選択行を削除しますか？')) return;
+
+  await runApi(async function() {
+    await request('/api/monthly-items/bulk', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'deleteMany',
+        month: month,
+        itemIds: selectedIds
+      })
+    });
+    setMonthlySelectionMode_(false);
+    await loadMonthlyData_({ silent: true });
+    showToast('月別データを削除しました。');
+  });
 }
 
 function trimTransportHistory_(stack) {
@@ -1818,6 +1951,20 @@ function applyDraftDestination_(destination) {
   document.querySelectorAll('[data-destination-tab]').forEach(function(button) {
     button.classList.toggle('active', String(button.dataset.destinationTab || '').trim().toLowerCase() === normalized);
   });
+  if (statusSwitch) {
+    statusSwitch.classList.toggle('hidden', normalized === 'monthly');
+  }
+  if (normalized === 'monthly') {
+    draftStatus = 'sold';
+    document.querySelectorAll('[data-status-tab]').forEach(function(tab) {
+      tab.classList.toggle('active', String(tab.dataset.statusTab || '').trim().toLowerCase() === 'sold');
+    });
+  } else {
+    draftStatus = 'unsold';
+    document.querySelectorAll('[data-status-tab]').forEach(function(tab) {
+      tab.classList.toggle('active', String(tab.dataset.statusTab || '').trim().toLowerCase() === 'unsold');
+    });
+  }
   if (monthlyTargetField) {
     monthlyTargetField.classList.toggle('hidden', normalized !== 'monthly');
   }
@@ -2118,8 +2265,9 @@ async function request(url, options) {
     return firebaseRequest(url, options);
   }
 
-  if (url === '/api/monthly-items' && method === 'POST') {
-    throw new Error('月別への直接追加はFirebaseモードで利用できます。');
+  if ((url === '/api/monthly-items' && method === 'POST')
+    || (url === '/api/monthly-items/bulk' && method === 'POST')) {
+    throw new Error('月別データ操作はFirebaseモードで利用できます。');
   }
 
   if (backendMode === 'local') {
@@ -2315,6 +2463,12 @@ async function firebaseRequest(url, options) {
   if (url === '/api/monthly-items' && method === 'POST') {
     return firebaseSaveMonthlyItem_(body);
   }
+  if (url === '/api/monthly-items/bulk' && method === 'POST') {
+    if (body.action === 'deleteMany') {
+      return firebaseDeleteMonthlyItems_(body.month, body.itemIds || []);
+    }
+    throw new Error('未対応の月別一括処理です。');
+  }
   if (url.indexOf('/api/items/') === 0 && method === 'DELETE') {
     const itemId = decodeURIComponent(url.split('/').pop() || '');
     return firebaseDeleteItems_([itemId]);
@@ -2419,6 +2573,32 @@ async function firebaseSaveMonthlyItem_(payload) {
     createdAtMs: now,
     updatedAtMs: now
   }, { merge: true });
+  return { ok: true };
+}
+
+async function firebaseDeleteMonthlyItems_(monthValue, itemIds) {
+  const month = String(monthValue || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error('対象月が不正です。');
+  }
+  const ids = normalizeIds_(itemIds);
+  if (!ids.length) {
+    throw new Error('削除対象がありません。');
+  }
+  const monthRef = firebaseArchiveMonthsCollection.doc(month);
+  const batch = firebaseDb.batch();
+  ids.forEach(function(id) {
+    batch.delete(monthRef.collection('items').doc(id));
+  });
+  batch.set(monthRef, { updatedAtMs: Date.now() }, { merge: true });
+  await batch.commit();
+
+  const remains = await monthRef.collection('items').limit(1).get();
+  if (remains.empty) {
+    await monthRef.delete().catch(function(_error) {
+      // Ignore not-found races when concurrent deletes happen.
+    });
+  }
   return { ok: true };
 }
 
@@ -2968,9 +3148,10 @@ async function runApi(fn) {
 function togglePending(isPending) {
   const bulkButtons = Array.from(document.querySelectorAll('[data-bulk-action]'));
   const transportButtons = Array.from(document.querySelectorAll('[data-transport-action]'));
+  const monthlyButtons = Array.from(document.querySelectorAll('[data-monthly-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
   [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton]
-    .concat(viewTabs, bulkButtons, transportButtons, monthButtons)
+    .concat(viewTabs, bulkButtons, transportButtons, monthlyButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;
     button.disabled = isPending;
@@ -3043,14 +3224,15 @@ function saveDashboardCache_(data) {
 }
 
 function renderMonthlyViews_() {
-  if (!monthlySwitch || !monthlySummaryGrid || !monthlySoldBody || !monthlyUnsoldBody || !monthlyChart) {
+  if (!monthlySwitch || !monthlySummaryGrid || !monthlySoldBody || !monthlyChart) {
     return;
   }
   if (monthlyState.loading) {
     monthlySwitch.innerHTML = '<span class="monthly-empty">取得中・・・</span>';
     monthlySummaryGrid.innerHTML = '';
-    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">取得中・・・</td></tr>';
-    monthlyUnsoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">取得中・・・</td></tr>';
+    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="7">取得中・・・</td></tr>';
+    updateMonthlySoldCountLabel_(0);
+    setMonthlySelectionMode_(false);
     monthlyChart.innerHTML = '<p class="monthly-empty">取得中・・・</p>';
     return;
   }
@@ -3059,8 +3241,9 @@ function renderMonthlyViews_() {
   if (!months.length) {
     monthlySwitch.innerHTML = '<span class="monthly-empty">月別シートがありません。</span>';
     monthlySummaryGrid.innerHTML = '';
-    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">データがありません。</td></tr>';
-    monthlyUnsoldBody.innerHTML = '<tr class="table-empty"><td colspan="6">データがありません。</td></tr>';
+    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="7">データがありません。</td></tr>';
+    updateMonthlySoldCountLabel_(0);
+    setMonthlySelectionMode_(false);
     monthlyChart.innerHTML = '<p class="monthly-empty">データがありません。</p>';
     return;
   }
@@ -3102,13 +3285,26 @@ function renderMonthlyViews_() {
     + '</div>';
 
   const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
-  const unsoldItems = Array.isArray(selected.unsoldItems) ? selected.unsoldItems : [];
+  updateMonthlySoldCountLabel_(soldItems.length);
+  const validIdSet = new Set(soldItems.map(function(item) { return String(item && item.id || '').trim(); }));
+  Array.from(selectedMonthlyItemIds).forEach(function(id) {
+    if (!validIdSet.has(String(id || '').trim())) {
+      selectedMonthlyItemIds.delete(id);
+    }
+  });
   monthlySoldBody.innerHTML = soldItems.length
-    ? soldItems.map(renderMonthlyRow_).join('')
-    : '<tr class="table-empty"><td colspan="6">販売済みデータはありません。</td></tr>';
-  monthlyUnsoldBody.innerHTML = unsoldItems.length
-    ? unsoldItems.map(renderMonthlyRow_).join('')
-    : '<tr class="table-empty"><td colspan="6">未販売在庫データはありません。</td></tr>';
+    ? soldItems.map(function(item) {
+      return renderMonthlyRow_(item, {
+        selected: selectedMonthlyItemIds.has(String(item && item.id || '').trim())
+      });
+    }).join('')
+    : '<tr class="table-empty"><td colspan="7">販売済みデータはありません。</td></tr>';
+  if (!soldItems.length) {
+    setMonthlySelectionMode_(false);
+  } else {
+    setMonthlySelectionMode_(monthlySelectionMode);
+    updateMonthlySoldSelectionCount_();
+  }
 
   renderMonthlyChart_();
 }
@@ -3189,15 +3385,19 @@ function getMonthOverMonth_(currentSummary, previousSummary) {
   };
 }
 
-function renderMonthlyRow_(item) {
+function renderMonthlyRow_(item, options) {
+  const opts = options || {};
   const margin = (item && typeof item.margin !== 'undefined') ? item.margin : null;
   const rateClass = margin < 0 ? 'bad' : (margin >= 0.2 ? 'good' : 'neutral');
   const revenue = sanitizeAmount_(item.revenue);
   const shipping = sanitizeAmount_(item.shipping, DEFAULT_SHIPPING);
   const cost = sanitizeAmount_(item.cost);
   const profit = Number(item.profit || 0);
+  const checkedAttr = opts.selected ? ' checked' : '';
+  const id = String(item && item.id ? item.id : '');
   return ''
-    + '<tr>'
+    + '<tr data-id="' + escapeHtml(id) + '">'
+    + '  <td class="selection-cell"><input data-select-monthly-row type="checkbox" aria-label="選択"' + checkedAttr + '></td>'
     + '  <td>' + escapeHtml(item.name || '') + '</td>'
     + '  <td class="money">' + formatYen(revenue) + '</td>'
     + '  <td class="money">' + formatYen(shipping) + '</td>'

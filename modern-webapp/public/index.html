@@ -451,6 +451,21 @@
       .monthly-metric-delta.neutral { color: #52617d; }
       .monthly-board + .monthly-board { margin-top: 12px; }
       .monthly-board-title { margin: 0 0 8px; font-size: 16px; }
+      .monthly-board-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .monthly-board-head span {
+        color: #1f4b99;
+        font-size: 11px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        background: #eaf1ff;
+        border: 1px solid #c8dafc;
+      }
       .monthly-empty { margin: 0; font-size: 12px; color: var(--muted); }
 
       .chart-legend {
@@ -810,11 +825,21 @@
             <h2>月別データ</h2>
             <div class="monthly-switch" id="monthlySwitch"></div>
             <div class="monthly-summary-grid" id="monthlySummaryGrid"></div>
-            <div class="monthly-board">
-              <h3 class="monthly-board-title">販売済み</h3>
+            <div class="monthly-board" id="monthlySoldBoard">
+              <div class="monthly-board-head">
+                <h3 class="monthly-board-title">販売済み</h3>
+                <span id="monthlySoldCountLabel">0件</span>
+              </div>
+              <div class="bulk-toolbar" id="monthlySoldToolbar">
+                <button class="button button-secondary bulk-button" type="button" data-monthly-action="toggle-selection">選択</button>
+                <button class="button button-secondary bulk-button bulk-only" type="button" data-monthly-action="toggle-select-all">全選択</button>
+                <button class="button button-danger bulk-button bulk-only" type="button" data-monthly-action="delete">削除</button>
+                <span class="bulk-count bulk-only" id="monthlySoldSelectedCount">0件選択</span>
+              </div>
               <div class="table-wrap">
                 <table class="compact-table">
                   <colgroup>
+                    <col class="col-select">
                     <col class="col-name">
                     <col class="col-revenue">
                     <col class="col-shipping">
@@ -824,33 +849,11 @@
                   </colgroup>
                   <thead>
                     <tr>
-                      <th>名前</th><th class="center">売上</th><th class="center">送料</th>
+                      <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
                       <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
                     </tr>
                   </thead>
                   <tbody id="monthlySoldBody"></tbody>
-                </table>
-              </div>
-            </div>
-            <div class="monthly-board">
-              <h3 class="monthly-board-title">未販売在庫</h3>
-              <div class="table-wrap">
-                <table class="compact-table">
-                  <colgroup>
-                    <col class="col-name">
-                    <col class="col-revenue">
-                    <col class="col-shipping">
-                    <col class="col-cost">
-                    <col class="col-profit">
-                    <col class="col-rate">
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
-                    </tr>
-                  </thead>
-                  <tbody id="monthlyUnsoldBody"></tbody>
                 </table>
               </div>
             </div>
@@ -878,7 +881,7 @@
           <button class="button button-secondary modal-close" id="closeQuickAddButton" type="button">閉じる</button>
         </div>
         <p class="quick-add-note">手数料は10%固定で自動計算されます。</p>
-        <div class="segmented">
+        <div class="segmented" id="statusSwitch">
           <button class="segment active" type="button" data-status-tab="unsold">未販売</button>
           <button class="segment" type="button" data-status-tab="sold">販売済み</button>
         </div>
@@ -979,6 +982,6 @@
         }
       };
     </script>
-    <script src="./app.js?v=20260311-login14"></script>
+    <script src="./app.js?v=20260311-login15"></script>
   </body>
   </html>
