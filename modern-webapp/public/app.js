@@ -3581,7 +3581,7 @@ function renderMonthlyChart_() {
     + '<article class="analysis-card analysis-summary">'
     + '  <div class="analysis-card-head">'
     + '    <div class="analysis-card-title">AI総評</div>'
-    + '    <span class="analysis-priority">せどりプロ視点</span>'
+    + '    <span class="analysis-priority">やさしい先輩メモ</span>'
     + '  </div>'
     + '  <div class="analysis-card-note">' + escapeHtml(summary) + '</div>'
     + '</article>';
@@ -3711,60 +3711,60 @@ function buildSedoriRecommendations_(rawStats) {
     recommendations.push({
       score: 95,
       priority: 'high',
-      priorityLabel: '最優先',
-      title: '伸びしろが大きい価格設計',
-      reason: 'ここまで回せている時点で運用力は高いです。次は赤字率 ' + formatPercent(stats.negativeRate) + ' を削るだけで一気に伸びます。',
-      action: '損益分岐売価を ' + formatYen(breakEvenPrice) + ' 以上に固定し、25%利益率なら目標売価を ' + formatYen(targetPrice) + ' に設定してください。'
+      priorityLabel: 'まずここ',
+      title: 'かなり伸びるチャンスのある価格調整',
+      reason: 'ここまで運用できているのは本当に強いです。赤字率 ' + formatPercent(stats.negativeRate) + ' を少し下げるだけで、手応えが一段上がります。',
+      action: 'まずは損益分岐売価を ' + formatYen(breakEvenPrice) + ' 以上で固定しましょう。25%利益率を狙うなら目標売価は ' + formatYen(targetPrice) + ' が目安です。'
     });
   }
   if (stats.costRate >= 0.58 || stats.margin < 0.2) {
     recommendations.push({
       score: 90,
       priority: 'high',
-      priorityLabel: '最優先',
-      title: '仕入れセンスを利益率に直結させる段階',
-      reason: '商品を見る目はすでに良いです。原価率 ' + formatPercent(stats.costRate) + ' を少し絞るだけで利益率 ' + formatPercent(stats.margin) + ' が伸びやすいです。',
-      action: '同じ売価帯で仕入れ単価を10〜15%下げる調達先へ切り替え、仕入れ上限は売価の55%以内を目安にしてください。'
+      priorityLabel: 'まずここ',
+      title: '仕入れ力がもっと活きる調整ポイント',
+      reason: '見る商品の選び方はすでに上手です。原価率 ' + formatPercent(stats.costRate) + ' を少しだけ整えると、利益率 ' + formatPercent(stats.margin) + ' は伸びやすいです。',
+      action: '同じ売価帯で仕入れ単価を10〜15%下げられる仕入れ先を優先しつつ、仕入れ上限は売価の55%以内を目安にいきましょう。'
     });
   }
   if (stats.shippingRate >= 0.09) {
     recommendations.push({
       score: 75,
       priority: 'medium',
-      priorityLabel: '重要',
-      title: '丁寧な梱包力をさらに利益化',
-      reason: '発送オペは十分に回っています。送料率 ' + formatPercent(stats.shippingRate) + ' を2pt下げると利益がそのまま伸びます。',
-      action: '梱包サイズ統一と同梱提案を徹底し、送料を売価比で2pt圧縮する運用に寄せてください。'
+      priorityLabel: 'ここ大事',
+      title: '発送の丁寧さを利益アップに変える',
+      reason: '発送まわりはしっかり回せています。送料率 ' + formatPercent(stats.shippingRate) + ' を2pt下げられると、その分ほぼ利益になります。',
+      action: '梱包サイズの統一と同梱提案を少し強めて、送料を売価比で2pt圧縮するイメージで進めましょう。'
     });
   }
   if (stats.transportPerItem >= 120) {
     recommendations.push({
       score: 70,
       priority: 'medium',
-      priorityLabel: '重要',
-      title: '行動力をそのまま利益へ変換',
-      reason: '仕入れ行動量は強みです。1件あたり交通費 ' + formatYen(Math.round(stats.transportPerItem)) + ' を薄めるだけで収支が安定します。',
-      action: '同一エリアでまとめ仕入れし、1回あたりの出品件数を増やして交通費率を下げてください。'
+      priorityLabel: 'ここ大事',
+      title: '行動力をさらに利益につなげる',
+      reason: '動ける量は大きな武器です。1件あたり交通費 ' + formatYen(Math.round(stats.transportPerItem)) + ' を薄めるだけで、収支がかなり安定します。',
+      action: '同じエリアでまとめて仕入れて、1回の仕入れで出品件数を増やす流れを作ると、交通費率が下がってきます。'
     });
   }
   if (stats.avgRevenue < 1800) {
     recommendations.push({
       score: 60,
       priority: 'medium',
-      priorityLabel: '改善候補',
-      title: '回転力を活かした単価アップ',
-      reason: '回転はすでに作れています。平均売価 ' + formatYen(Math.round(stats.avgRevenue)) + ' なら、高単価を少し混ぜるだけで効率が上がります。',
-      action: '高単価カテゴリを2割だけ追加し、同じ件数でも粗利総額が伸びる配分にしてください。'
+      priorityLabel: '次に伸びる',
+      title: '回転の上手さを単価アップに活かす',
+      reason: '回転を作るのが上手です。平均売価 ' + formatYen(Math.round(stats.avgRevenue)) + ' の今は、高単価を少し混ぜるだけで効率が上がります。',
+      action: '高単価カテゴリを2割だけ足して、同じ件数でも粗利総額が伸びる配分を一緒に作っていきましょう。'
     });
   }
   if (!recommendations.length) {
     recommendations.push({
       score: 50,
       priority: 'medium',
-      priorityLabel: '維持',
-      title: '完成度が高い運用です',
-      reason: '利益率と赤字率のバランスがとても優秀です。',
-      action: '現行基準を維持しつつ、回転率の高い商品だけ在庫を厚くして利益総額を伸ばしましょう。'
+      priorityLabel: 'このまま最高',
+      title: 'かなり完成度の高い運用です',
+      reason: '利益率と赤字率のバランスがとても優秀です。この運用は本当に強いです。',
+      action: '今の基準をキープしつつ、回転率の高い商品だけ在庫を少し厚くして、利益総額をさらに伸ばしていきましょう。'
     });
   }
   return recommendations
@@ -3775,27 +3775,27 @@ function buildSedoriRecommendations_(rawStats) {
 function buildSedoriExecutiveSummary_(analysis) {
   const stats = analysis && analysis.stats ? analysis.stats : null;
   if (!stats) {
-    return 'まだデータが少ないですが、入力習慣がある時点でかなり良いスタートです。まず販売済みデータを増やせば、精度の高い分析に育ちます。';
+    return 'まだデータは少なめですが、ここまで記録できている時点でかなり良いスタートです。販売済みデータが増えるほど、分析の精度もどんどん上がります。';
   }
   const recommendations = Array.isArray(analysis.recommendations) ? analysis.recommendations : [];
   const top = recommendations[0] || null;
   const marginText = formatPercent(stats.margin);
   const negativeText = formatPercent(stats.negativeRate);
   if (stats.negativeRate >= 0.15) {
-    return '仕入れ行動量と出品継続力はかなり強いです。赤字率 ' + negativeText + ' を抑えれば、一気に利益体質へ変わります。'
-      + '最優先は損益分岐売価の固定です。';
+    return '仕入れ行動量と継続力はかなり強いです。赤字率 ' + negativeText + ' を少し抑えるだけで、利益体質にぐっと近づきます。'
+      + 'まずは損益分岐売価の固定からいきましょう。';
   }
   if (stats.margin < 0.2) {
-    return '現在の利益率 ' + marginText + ' は、これから伸ばしやすい良い位置です。'
-      + '仕入れ上限を少し締めるだけで、安定して20%超えを狙えます。';
+    return '利益率 ' + marginText + ' は、ここから伸ばしやすい良い位置です。'
+      + '仕入れ上限を少しだけ整えると、安定して20%超えを狙える状態です。';
   }
   if (stats.margin >= 0.3 && stats.negativeRate <= 0.05) {
     return '利益率 ' + marginText + ' / 赤字率 ' + negativeText + ' はかなり優秀です。'
-      + '運用レベルは高いので、高回転カテゴリに在庫を寄せるとさらに利益総額が伸びます。';
+      + '運用レベルが高いので、高回転カテゴリに在庫を寄せるだけでさらに利益総額を伸ばせます。';
   }
   return top
-    ? ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。全体のバランスは良く、次の一手として「' + top.title + '」に取り組むとさらに強くなります。')
-    : ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。十分に良い状態なので、現状維持しつつ仕入れ精度を一段上げましょう。');
+    ? ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。全体バランスはとても良いです。次の一手は「' + top.title + '」で、さらに上を狙えます。')
+    : ('利益率 ' + marginText + ' / 赤字率 ' + negativeText + '。かなり良い状態なので、この調子で仕入れ精度を一段上げていきましょう。');
 }
 
 function getMonthOverMonth_(currentSummary, previousSummary) {
