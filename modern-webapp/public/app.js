@@ -44,6 +44,7 @@ const ARCHIVE_BUTTON_LABEL_CANCEL = 'アーカイブ取消';
 const ARCHIVE_BUTTON_ACTION_ARCHIVE = 'archive';
 const ARCHIVE_BUTTON_ACTION_CANCEL = 'cancel';
 const FIREBASE_ARCHIVE_META_DOC = 'archive_meta';
+const AUTH_REDIRECT_PENDING_KEY = 'mercari_auth_redirect_pending_v1';
 
 let backendMode = 'gas';
 let firebaseDb = null;
@@ -648,12 +649,18 @@ async function initializeAuth_() {
     void applyAuthUserState_(user, { syncScope: true });
   });
 
+  const hadPendingRedirect = getAuthRedirectPending_();
   try {
     const redirectResult = await firebaseAuth.getRedirectResult();
     if (redirectResult && redirectResult.user) {
+      clearAuthRedirectPending_();
       await applyAuthUserState_(redirectResult.user, { syncScope: true });
+    } else if (hadPendingRedirect && !firebaseAuth.currentUser) {
+      clearAuthRedirectPending_();
+      showToast('ログイン結果を取得できませんでした。もう一度ログインしてください。');
     }
   } catch (error) {
+    clearAuthRedirectPending_();
     const code = String(error && error.code ? error.code : '').trim();
     if (code !== 'auth/no-auth-event') {
       showToast(mapFirebaseAuthError_(error).message || 'ログインに失敗しました。');
@@ -661,9 +668,30 @@ async function initializeAuth_() {
   }
 
   if (!signedInUser && firebaseAuth.currentUser) {
+    clearAuthRedirectPending_();
     await applyAuthUserState_(firebaseAuth.currentUser, { syncScope: true });
   }
 
+}
+
+function setAuthRedirectPending_() {
+  try {
+    sessionStorage.setItem(AUTH_REDIRECT_PENDING_KEY, '1');
+  } catch (_error) {}
+}
+
+function clearAuthRedirectPending_() {
+  try {
+    sessionStorage.removeItem(AUTH_REDIRECT_PENDING_KEY);
+  } catch (_error) {}
+}
+
+function getAuthRedirectPending_() {
+  try {
+    return sessionStorage.getItem(AUTH_REDIRECT_PENDING_KEY) === '1';
+  } catch (_error) {
+    return false;
+  }
 }
 
 function getAuthStatusLabel_(user) {
@@ -712,6 +740,7 @@ async function signInWithGoogle_() {
 
   if (useRedirect) {
     showToast('ログイン画面へ移動します...');
+    setAuthRedirectPending_();
     await firebaseAuth.signInWithRedirect(provider);
     return;
   }
@@ -725,6 +754,7 @@ async function signInWithGoogle_() {
     const code = String(error && error.code ? error.code : '').trim();
     if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
       showToast('ポップアップを開けないため、ログイン画面へ移動します...');
+      setAuthRedirectPending_();
       await firebaseAuth.signInWithRedirect(provider);
       return;
     }
@@ -757,12 +787,7 @@ function updateAuthUi_(statusText) {
 }
 
 function shouldUseRedirectLogin_() {
-  const ua = String(navigator.userAgent || '').toLowerCase();
-  const isIphone = ua.includes('iphone');
-  const isIpad = ua.includes('ipad') || (ua.includes('macintosh') && navigator.maxTouchPoints > 1);
-  const isIos = isIphone || isIpad;
-  const isSafari = ua.includes('safari') && !ua.includes('crios') && !ua.includes('fxios') && !ua.includes('edgios');
-  return isIos && isSafari;
+  return false;
 }
 
 function mapFirebaseAuthError_(error) {
