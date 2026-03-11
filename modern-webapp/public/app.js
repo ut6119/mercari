@@ -2402,7 +2402,12 @@ async function firebaseSaveMonthlyItem_(payload) {
   }
   const item = sanitizePayloadForStore_(source.item || {});
   const now = Date.now();
-  const monthCollection = firebaseArchiveMonthsCollection.doc(month).collection('items');
+  const monthRef = firebaseArchiveMonthsCollection.doc(month);
+  await monthRef.set({
+    month: month,
+    updatedAtMs: now
+  }, { merge: true });
+  const monthCollection = monthRef.collection('items');
   const id = String(item.id || monthCollection.doc().id);
   await monthCollection.doc(id).set({
     status: item.status,
@@ -2506,6 +2511,10 @@ async function firebaseArchive_() {
   const itemIds = soldItems.map(function(item) {
     return String(item.id || '').trim();
   }).filter(Boolean);
+  batch.set(firebaseArchiveMonthsCollection.doc(month), {
+    month: month,
+    updatedAtMs: archivedAt
+  }, { merge: true });
 
   soldItems.forEach(function(item) {
     const archiveRef = firebaseArchiveMonthsCollection
@@ -2636,12 +2645,84 @@ async function firebaseLoadMonthly_() {
       unsoldItems: unsoldItems
     });
   }
+  try {
+    const orphanEntries = await loadMonthlyOrphanEntriesFromCollectionGroup_();
+    orphanEntries.forEach(function(entry) {
+      if (!entry || !entry.month || monthMap.has(entry.month)) {
+        return;
+      }
+      monthMap.set(entry.month, entry);
+    });
+  } catch (error) {
+    console.warn('monthly orphan fallback skipped:', error);
+  }
 
   return {
     months: Array.from(monthMap.values()).sort(function(a, b) {
       return String(a.month || '').localeCompare(String(b.month || ''));
     }),
     generatedAt: formatDateTime_(Date.now())
+  };
+}
+
+async function loadMonthlyOrphanEntriesFromCollectionGroup_() {
+  if (!firebaseDb || typeof firebaseDb.collectionGroup !== 'function') {
+    return [];
+  }
+  const snapshot = await firebaseDb.collectionGroup('items').get();
+  const monthItemsMap = new Map();
+
+  snapshot.docs.forEach(function(doc) {
+    const parsed = parseArchiveMonthlyItemPath_(doc && doc.ref ? doc.ref.path : '');
+    if (!parsed) return;
+    const data = doc.data() || {};
+    const list = monthItemsMap.get(parsed.month) || [];
+    list.push({
+      id: doc.id,
+      status: normalizeStatusValue_(data.status) || 'sold',
+      name: String(data.name || '').trim(),
+      revenue: sanitizeAmount_(data.revenue),
+      shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
+      cost: sanitizeAmount_(data.cost),
+      transport: sanitizeAmount_(data.transport),
+      createdAtMs: toTimestampMs_(data.createdAtMs),
+      updatedAtMs: toTimestampMs_(data.updatedAtMs)
+    });
+    monthItemsMap.set(parsed.month, list);
+  });
+
+  const entries = [];
+  monthItemsMap.forEach(function(items, month) {
+    const soldItems = sortItemsByCreatedOrder_(items
+      .filter(function(item) { return item.status === 'sold'; })
+      .map(enrichItem_));
+    const unsoldItems = sortItemsByCreatedOrder_(items
+      .filter(function(item) { return item.status === 'unsold'; })
+      .map(enrichItem_));
+    entries.push({
+      month: month,
+      summary: buildSummary_(soldItems, unsoldItems),
+      soldItems: soldItems,
+      unsoldItems: unsoldItems
+    });
+  });
+  return entries;
+}
+
+function parseArchiveMonthlyItemPath_(pathValue) {
+  const path = String(pathValue || '').trim();
+  if (!path) return null;
+  const parts = path.split('/');
+  if (parts.length !== 6) return null;
+  if (parts[0] !== FIREBASE_ARCHIVE_COLLECTION) return null;
+  if (parts[1] !== firebaseActiveUserId) return null;
+  if (parts[2] !== FIREBASE_USER_MONTHS_SUBCOLLECTION) return null;
+  if (parts[4] !== 'items') return null;
+  const month = String(parts[3] || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(month)) return null;
+  return {
+    month: month,
+    itemId: String(parts[5] || '').trim()
   };
 }
 
