@@ -32,6 +32,7 @@ const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = 'Asia/Tokyo';
 const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
 const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
+const TRANSPORT_PRESET_CONFIG_KEY = 'mercari_transport_preset_config_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
 const ENABLE_GIF_EFFECTS = false;
 const ENABLE_CATEGORY_BURST_EFFECTS = true;
@@ -53,6 +54,7 @@ let firebaseItemsCollection = null;
 let firebaseTransportLedgerCollection = null;
 let firebaseArchiveMonthsCollection = null;
 let firebaseArchiveMetaRef = null;
+let firebaseTransportPresetRef = null;
 let firebaseActiveUserId = '';
 let firebaseItemsCache = [];
 let authFirebaseApp = null;
@@ -112,6 +114,17 @@ const transportPlaceInput = document.getElementById('transportPlaceInput');
 const transportAddButton = document.getElementById('transportAddButton');
 const transportUndoButton = document.getElementById('transportUndoButton');
 const transportRedoButton = document.getElementById('transportRedoButton');
+const openTransportPresetModalButton = document.getElementById('openTransportPresetModalButton');
+const transportPresetModal = document.getElementById('transportPresetModal');
+const closeTransportPresetModalButton = document.getElementById('closeTransportPresetModalButton');
+const transportPresetForm = document.getElementById('transportPresetForm');
+const resetTransportPresetButton = document.getElementById('resetTransportPresetButton');
+const transportPresetTennojiLabelInput = document.getElementById('transportPresetTennojiLabel');
+const transportPresetTennojiAmountInput = document.getElementById('transportPresetTennojiAmount');
+const transportPresetNambaLabelInput = document.getElementById('transportPresetNambaLabel');
+const transportPresetNambaAmountInput = document.getElementById('transportPresetNambaAmount');
+const transportPresetUmedaLabelInput = document.getElementById('transportPresetUmedaLabel');
+const transportPresetUmedaAmountInput = document.getElementById('transportPresetUmedaAmount');
 const viewTabs = Array.from(document.querySelectorAll('[data-view-tab]'));
 const homeView = document.getElementById('homeView');
 const monthlyView = document.getElementById('monthlyView');
@@ -148,20 +161,16 @@ const pendingBottomByStatus = {
 const historyPast = [];
 const historyFuture = [];
 const HISTORY_LIMIT = 40;
-const TRANSPORT_PRESET_VALUES = {
-  tennoji: 580,
-  namba: 580,
-  umeda: 680,
-  other: null
+const TRANSPORT_PRESET_DEFAULTS = {
+  tennoji: { label: '天王寺', amount: 580 },
+  namba: { label: '難波', amount: 580 },
+  umeda: { label: '梅田', amount: 680 },
+  other: { label: 'その他', amount: null }
 };
-const TRANSPORT_PRESET_LABELS = {
-  tennoji: '天王寺',
-  namba: '難波',
-  umeda: '梅田',
-  other: 'その他'
-};
+const TRANSPORT_PRESET_EDITABLE_KEYS = ['tennoji', 'namba', 'umeda'];
 let selectedTransportPreset = '';
 let selectedTransportLedgerPreset = '';
+let transportPresetConfig = createDefaultTransportPresetConfig_();
 let transportLedger = loadTransportLedger_();
 let transportSelectionMode = false;
 const selectedTransportLedgerIds = new Set();
@@ -188,13 +197,15 @@ async function init() {
   await ensureFirebaseSdk_();
   await initializeAuth_();
   await initializeBackend();
+  await initializeTransportPresetConfig_();
   bindEvents();
   setArchiveCancelState_(false);
   startAddButtonPeek_();
   setDefaultTransportDate_();
   setDefaultMonthlyTarget_();
   applyDraftDestination_(draftDestination);
-  applyTransportLedgerPreset_('');
+  renderTransportPresetButtons_();
+  applyTransportLedgerPreset_(selectedTransportLedgerPreset);
   closeQuickAddModal_({ keepHomeView: true });
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
@@ -342,6 +353,7 @@ function refreshFirebaseCollectionsForCurrentUser_() {
     firebaseTransportLedgerCollection = null;
     firebaseArchiveMonthsCollection = null;
     firebaseArchiveMetaRef = null;
+    firebaseTransportPresetRef = null;
     firebaseActiveUserId = '';
     return;
   }
@@ -351,10 +363,16 @@ function refreshFirebaseCollectionsForCurrentUser_() {
     firebaseTransportLedgerCollection = null;
     firebaseArchiveMonthsCollection = null;
     firebaseArchiveMetaRef = null;
+    firebaseTransportPresetRef = null;
     firebaseActiveUserId = '';
     return;
   }
-  if (firebaseActiveUserId === userId && firebaseItemsCollection && firebaseArchiveMonthsCollection && firebaseTransportLedgerCollection && firebaseArchiveMetaRef) {
+  if (firebaseActiveUserId === userId
+    && firebaseItemsCollection
+    && firebaseArchiveMonthsCollection
+    && firebaseTransportLedgerCollection
+    && firebaseArchiveMetaRef
+    && firebaseTransportPresetRef) {
     return;
   }
   firebaseActiveUserId = userId;
@@ -368,6 +386,7 @@ function refreshFirebaseCollectionsForCurrentUser_() {
     .collection(FIREBASE_USER_META_SUBCOLLECTION)
     .doc(FIREBASE_USER_META_DOC);
   firebaseTransportLedgerCollection = userArchiveRoot.collection(FIREBASE_USER_TRANSPORT_SUBCOLLECTION);
+  firebaseTransportPresetRef = userArchiveRoot.collection(FIREBASE_USER_META_SUBCOLLECTION).doc('transport_presets');
 }
 
 async function runFirestoreMutations_(mutations) {
@@ -547,6 +566,9 @@ async function syncDataScopeForAuth_(options) {
   transportLedger = loadTransportLedger_();
   selectedTransportLedgerIds.clear();
   transportSelectionMode = false;
+  await initializeTransportPresetConfig_();
+  renderTransportPresetButtons_();
+  applyTransportLedgerPreset_(selectedTransportLedgerPreset);
   renderTransportLedger_();
 
   if (!hasFirebaseDataAccess_()) {
@@ -895,6 +917,23 @@ function bindEvents() {
       closeQuickAddModal_();
     });
   }
+  if (openTransportPresetModalButton) {
+    openTransportPresetModalButton.addEventListener('click', function() {
+      openTransportPresetModal_();
+    });
+  }
+  if (closeTransportPresetModalButton) {
+    closeTransportPresetModalButton.addEventListener('click', function() {
+      closeTransportPresetModal_();
+    });
+  }
+  if (transportPresetModal) {
+    transportPresetModal.addEventListener('click', function(event) {
+      if (event.target === transportPresetModal) {
+        closeTransportPresetModal_();
+      }
+    });
+  }
   if (quickAddModal) {
     quickAddModal.addEventListener('click', function(event) {
       if (event.target === quickAddModal) {
@@ -902,8 +941,31 @@ function bindEvents() {
       }
     });
   }
+  if (transportPresetForm) {
+    transportPresetForm.addEventListener('submit', function(event) {
+      event.preventDefault();
+      void runApi(async function() {
+        transportPresetConfig = readTransportPresetModalForm_();
+        await persistTransportPresetConfig_();
+        renderTransportPresetButtons_();
+        applyTransportLedgerPreset_(selectedTransportLedgerPreset);
+        closeTransportPresetModal_();
+        showToast('交通費場所ボタンを保存しました。');
+      });
+    });
+  }
+  if (resetTransportPresetButton) {
+    resetTransportPresetButton.addEventListener('click', function() {
+      fillTransportPresetModalForm_(createDefaultTransportPresetConfig_());
+    });
+  }
   document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape' && quickAddModal && quickAddModal.classList.contains('open')) {
+    if (event.key !== 'Escape') return;
+    if (transportPresetModal && transportPresetModal.classList.contains('open')) {
+      closeTransportPresetModal_();
+      return;
+    }
+    if (quickAddModal && quickAddModal.classList.contains('open')) {
       closeQuickAddModal_();
     }
   });
@@ -1853,12 +1915,194 @@ async function refreshDashboardInBackground_() {
   }
 }
 
+function createDefaultTransportPresetConfig_() {
+  return {
+    tennoji: {
+      label: String(TRANSPORT_PRESET_DEFAULTS.tennoji.label),
+      amount: sanitizeAmount_(TRANSPORT_PRESET_DEFAULTS.tennoji.amount)
+    },
+    namba: {
+      label: String(TRANSPORT_PRESET_DEFAULTS.namba.label),
+      amount: sanitizeAmount_(TRANSPORT_PRESET_DEFAULTS.namba.amount)
+    },
+    umeda: {
+      label: String(TRANSPORT_PRESET_DEFAULTS.umeda.label),
+      amount: sanitizeAmount_(TRANSPORT_PRESET_DEFAULTS.umeda.amount)
+    },
+    other: {
+      label: String(TRANSPORT_PRESET_DEFAULTS.other.label),
+      amount: null
+    }
+  };
+}
+
+function normalizeTransportPresetKey_(value) {
+  const key = String(value || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(TRANSPORT_PRESET_DEFAULTS, key) ? key : '';
+}
+
+function normalizeTransportPresetConfig_(source) {
+  const normalized = createDefaultTransportPresetConfig_();
+  const input = source && typeof source === 'object' ? source : {};
+  TRANSPORT_PRESET_EDITABLE_KEYS.forEach(function(key) {
+    const candidate = input[key] && typeof input[key] === 'object' ? input[key] : {};
+    const label = String(candidate.label || '').trim();
+    const amount = sanitizeAmount_(candidate.amount);
+    normalized[key].label = label || normalized[key].label;
+    normalized[key].amount = amount > 0 ? amount : normalized[key].amount;
+  });
+  return normalized;
+}
+
+function getTransportPresetConfigPayload_() {
+  return {
+    tennoji: Object.assign({}, transportPresetConfig.tennoji),
+    namba: Object.assign({}, transportPresetConfig.namba),
+    umeda: Object.assign({}, transportPresetConfig.umeda),
+    other: Object.assign({}, transportPresetConfig.other)
+  };
+}
+
+function loadTransportPresetConfig_() {
+  try {
+    const raw = localStorage.getItem(getScopedStorageKey_(TRANSPORT_PRESET_CONFIG_KEY));
+    if (!raw) return createDefaultTransportPresetConfig_();
+    const parsed = JSON.parse(raw);
+    return normalizeTransportPresetConfig_(parsed);
+  } catch (_error) {
+    return createDefaultTransportPresetConfig_();
+  }
+}
+
+function saveTransportPresetConfigLocal_() {
+  try {
+    localStorage.setItem(
+      getScopedStorageKey_(TRANSPORT_PRESET_CONFIG_KEY),
+      JSON.stringify(getTransportPresetConfigPayload_())
+    );
+  } catch (_error) {
+    // Ignore storage quota/permissions errors.
+  }
+}
+
+async function initializeTransportPresetConfig_() {
+  transportPresetConfig = loadTransportPresetConfig_();
+  if (backendMode !== 'firebase' || !firebaseTransportPresetRef || !hasFirebaseDataAccess_()) {
+    return;
+  }
+  try {
+    const snapshot = await firebaseTransportPresetRef.get();
+    if (snapshot.exists) {
+      const data = snapshot.data() || {};
+      const remoteConfig = normalizeTransportPresetConfig_(data.presets || data);
+      transportPresetConfig = remoteConfig;
+      saveTransportPresetConfigLocal_();
+      return;
+    }
+    await firebaseTransportPresetRef.set({
+      presets: getTransportPresetConfigPayload_(),
+      updatedAtMs: Date.now()
+    }, { merge: true });
+  } catch (error) {
+    console.warn('transport preset init fallback to local cache:', error);
+  }
+}
+
+async function persistTransportPresetConfig_() {
+  saveTransportPresetConfigLocal_();
+  if (backendMode !== 'firebase' || !firebaseTransportPresetRef || !hasFirebaseDataAccess_()) {
+    return;
+  }
+  try {
+    await firebaseTransportPresetRef.set({
+      presets: getTransportPresetConfigPayload_(),
+      updatedAtMs: Date.now()
+    }, { merge: true });
+  } catch (error) {
+    console.warn('transport preset sync fallback to local cache:', error);
+  }
+}
+
+function getTransportPresetLabel_(presetKey) {
+  const key = normalizeTransportPresetKey_(presetKey);
+  if (!key) return '';
+  const config = transportPresetConfig[key] || TRANSPORT_PRESET_DEFAULTS[key];
+  return String(config && config.label ? config.label : '');
+}
+
+function getTransportPresetAmount_(presetKey) {
+  const key = normalizeTransportPresetKey_(presetKey);
+  if (!key || key === 'other') return null;
+  const config = transportPresetConfig[key] || TRANSPORT_PRESET_DEFAULTS[key];
+  const amount = sanitizeAmount_(config && config.amount);
+  return amount > 0 ? amount : sanitizeAmount_(TRANSPORT_PRESET_DEFAULTS[key].amount);
+}
+
+function renderTransportPresetButtons_() {
+  document.querySelectorAll('[data-transport-ledger-preset]').forEach(function(button) {
+    const key = normalizeTransportPresetKey_(button.dataset.transportLedgerPreset);
+    if (!key) return;
+    button.textContent = getTransportPresetLabel_(key) || button.textContent;
+  });
+  document.querySelectorAll('[data-transport-preset]').forEach(function(button) {
+    const key = normalizeTransportPresetKey_(button.dataset.transportPreset);
+    if (!key) return;
+    button.textContent = getTransportPresetLabel_(key) || button.textContent;
+  });
+}
+
+function getTransportPresetModalInputMap_() {
+  return {
+    tennoji: { label: transportPresetTennojiLabelInput, amount: transportPresetTennojiAmountInput },
+    namba: { label: transportPresetNambaLabelInput, amount: transportPresetNambaAmountInput },
+    umeda: { label: transportPresetUmedaLabelInput, amount: transportPresetUmedaAmountInput }
+  };
+}
+
+function fillTransportPresetModalForm_(config) {
+  const source = normalizeTransportPresetConfig_(config);
+  const map = getTransportPresetModalInputMap_();
+  TRANSPORT_PRESET_EDITABLE_KEYS.forEach(function(key) {
+    const target = map[key];
+    if (!target) return;
+    if (target.label) target.label.value = String(source[key].label || '');
+    if (target.amount) target.amount.value = String(sanitizeAmount_(source[key].amount) || '');
+  });
+}
+
+function readTransportPresetModalForm_() {
+  const next = createDefaultTransportPresetConfig_();
+  const map = getTransportPresetModalInputMap_();
+  TRANSPORT_PRESET_EDITABLE_KEYS.forEach(function(key) {
+    const target = map[key];
+    if (!target) return;
+    const label = target.label ? String(target.label.value || '').trim() : '';
+    const amount = target.amount ? sanitizeAmount_(target.amount.value) : 0;
+    next[key].label = label || next[key].label;
+    next[key].amount = amount > 0 ? amount : next[key].amount;
+  });
+  return normalizeTransportPresetConfig_(next);
+}
+
+function openTransportPresetModal_() {
+  if (!transportPresetModal) return;
+  fillTransportPresetModalForm_(transportPresetConfig);
+  transportPresetModal.classList.add('open');
+  transportPresetModal.setAttribute('aria-hidden', 'false');
+  if (transportPresetTennojiLabelInput) {
+    transportPresetTennojiLabelInput.focus();
+  }
+}
+
+function closeTransportPresetModal_() {
+  if (!transportPresetModal) return;
+  transportPresetModal.classList.remove('open');
+  transportPresetModal.setAttribute('aria-hidden', 'true');
+}
+
 function applyTransportPreset_(preset, options) {
   const opts = options || {};
-  const candidate = String(preset || '').trim().toLowerCase();
-  const normalizedPreset = Object.prototype.hasOwnProperty.call(TRANSPORT_PRESET_VALUES, candidate)
-    ? candidate
-    : '';
+  const normalizedPreset = normalizeTransportPresetKey_(preset);
   selectedTransportPreset = normalizedPreset;
 
   document.querySelectorAll('[data-transport-preset]').forEach(function(button) {
@@ -1883,14 +2127,11 @@ function applyTransportPreset_(preset, options) {
 
   transportInput.readOnly = true;
   transportInput.placeholder = '';
-  transportInput.value = String(TRANSPORT_PRESET_VALUES[normalizedPreset] || 0);
+  transportInput.value = String(getTransportPresetAmount_(normalizedPreset) || 0);
 }
 
 function applyTransportLedgerPreset_(preset) {
-  const candidate = String(preset || '').trim().toLowerCase();
-  const normalizedPreset = Object.prototype.hasOwnProperty.call(TRANSPORT_PRESET_VALUES, candidate)
-    ? candidate
-    : '';
+  const normalizedPreset = normalizeTransportPresetKey_(preset);
   selectedTransportLedgerPreset = normalizedPreset;
 
   document.querySelectorAll('[data-transport-ledger-preset]').forEach(function(button) {
@@ -1921,10 +2162,10 @@ function applyTransportLedgerPreset_(preset) {
 
   transportAmountInput.readOnly = true;
   transportAmountInput.placeholder = '';
-  transportAmountInput.value = String(TRANSPORT_PRESET_VALUES[normalizedPreset] || 0);
+  transportAmountInput.value = String(getTransportPresetAmount_(normalizedPreset) || 0);
   transportPlaceInput.readOnly = true;
   transportPlaceInput.placeholder = '';
-  transportPlaceInput.value = TRANSPORT_PRESET_LABELS[normalizedPreset] || '';
+  transportPlaceInput.value = getTransportPresetLabel_(normalizedPreset);
 }
 
 function getQuickAddTransportAmount_() {
@@ -3146,7 +3387,7 @@ function togglePending(isPending) {
   const transportButtons = Array.from(document.querySelectorAll('[data-transport-action]'));
   const monthlyButtons = Array.from(document.querySelectorAll('[data-monthly-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
-  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton]
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton]
     .concat(viewTabs, bulkButtons, transportButtons, monthlyButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;

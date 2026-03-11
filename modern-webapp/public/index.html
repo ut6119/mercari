@@ -352,6 +352,16 @@
         gap: 8px;
         margin-bottom: 8px;
       }
+      .transport-switch-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .transport-preset-edit {
+        padding: 6px 10px;
+        font-size: 11px;
+      }
       .transport-button {
         padding: 7px 12px;
         border-radius: 999px;
@@ -547,6 +557,15 @@
         padding: 7px 11px;
         font-size: 12px;
       }
+      .transport-preset-edit-grid {
+        display: grid;
+        gap: 10px;
+      }
+      .transport-preset-edit-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px;
+        gap: 8px;
+      }
       .burst-layer {
         position: fixed;
         inset: 0;
@@ -607,6 +626,7 @@
         .view-tab { font-size: 12px; padding: 9px 6px; }
         .field-row { grid-template-columns: 1fr; }
         .transport-ledger-form .field-row { grid-template-columns: 1fr; }
+        .transport-preset-edit-row { grid-template-columns: 1fr; }
         .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
         .monthly-summary-grid { grid-template-columns: minmax(0, 1fr); }
         .chart-row { grid-template-columns: 56px 1fr; }
@@ -792,11 +812,14 @@
                 </table>
               </div>
               <form id="transportLedgerForm" class="form-grid transport-ledger-form">
-                <div class="transport-switch" id="transportPresetSwitch">
-                  <button class="transport-button" type="button" data-transport-ledger-preset="tennoji">天王寺</button>
-                  <button class="transport-button" type="button" data-transport-ledger-preset="namba">難波</button>
-                  <button class="transport-button" type="button" data-transport-ledger-preset="umeda">梅田</button>
-                  <button class="transport-button" type="button" data-transport-ledger-preset="other">その他</button>
+                <div class="transport-switch-row">
+                  <div class="transport-switch" id="transportPresetSwitch">
+                    <button class="transport-button" type="button" data-transport-ledger-preset="tennoji">天王寺</button>
+                    <button class="transport-button" type="button" data-transport-ledger-preset="namba">難波</button>
+                    <button class="transport-button" type="button" data-transport-ledger-preset="umeda">梅田</button>
+                    <button class="transport-button" type="button" data-transport-ledger-preset="other">その他</button>
+                  </div>
+                  <button class="button button-secondary transport-preset-edit" id="openTransportPresetModalButton" type="button">場所編集</button>
                 </div>
                 <div class="field-row">
                   <div class="field">
@@ -872,6 +895,52 @@
             <div class="chart-group" id="monthlyChart"></div>
           </section>
         </div>
+      </section>
+    </div>
+    <div class="modal-overlay" id="transportPresetModal" aria-hidden="true">
+      <section class="panel modal-card">
+        <div class="modal-head">
+          <h2>交通費場所ボタン編集</h2>
+          <button class="button button-secondary modal-close" id="closeTransportPresetModalButton" type="button">閉じる</button>
+        </div>
+        <form id="transportPresetForm" class="form-grid">
+          <div class="transport-preset-edit-grid">
+            <div class="transport-preset-edit-row">
+              <div class="field">
+                <label for="transportPresetTennojiLabel">ボタン1 場所</label>
+                <input id="transportPresetTennojiLabel" type="text" maxlength="24" placeholder="場所名">
+              </div>
+              <div class="field">
+                <label for="transportPresetTennojiAmount">金額</label>
+                <input id="transportPresetTennojiAmount" type="number" min="1" step="1" placeholder="0">
+              </div>
+            </div>
+            <div class="transport-preset-edit-row">
+              <div class="field">
+                <label for="transportPresetNambaLabel">ボタン2 場所</label>
+                <input id="transportPresetNambaLabel" type="text" maxlength="24" placeholder="場所名">
+              </div>
+              <div class="field">
+                <label for="transportPresetNambaAmount">金額</label>
+                <input id="transportPresetNambaAmount" type="number" min="1" step="1" placeholder="0">
+              </div>
+            </div>
+            <div class="transport-preset-edit-row">
+              <div class="field">
+                <label for="transportPresetUmedaLabel">ボタン3 場所</label>
+                <input id="transportPresetUmedaLabel" type="text" maxlength="24" placeholder="場所名">
+              </div>
+              <div class="field">
+                <label for="transportPresetUmedaAmount">金額</label>
+                <input id="transportPresetUmedaAmount" type="number" min="1" step="1" placeholder="0">
+              </div>
+            </div>
+          </div>
+          <div class="field-row">
+            <button class="button button-secondary" id="resetTransportPresetButton" type="button">初期値に戻す</button>
+            <button class="button button-primary" id="saveTransportPresetButton" type="submit">保存する</button>
+          </div>
+        </form>
       </section>
     </div>
     <div class="modal-overlay" id="quickAddModal" aria-hidden="true">
@@ -982,6 +1051,6 @@
         }
       };
     </script>
-    <script src="./app.js?v=20260311-login16"></script>
+    <script src="./app.js?v=20260311-login17"></script>
   </body>
   </html>
