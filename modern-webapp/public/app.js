@@ -645,37 +645,13 @@ async function initializeAuth_() {
     }
   }
   firebaseAuth.onAuthStateChanged(function(user) {
-    signedInUser = user || null;
-    if (!user) {
-      signedInIdToken = '';
-      updateAuthUi_('認証: 未ログイン');
-      void syncDataScopeForAuth_({ suppressToast: true });
-      return;
-    }
-    void user.getIdToken().then(function(token) {
-      signedInIdToken = String(token || '');
-      const email = String(user.email || '').trim();
-      updateAuthUi_(email ? ('認証: ' + email) : '認証: ログイン済み');
-      void syncDataScopeForAuth_({ suppressToast: true });
-    }).catch(function() {
-      signedInIdToken = '';
-      updateAuthUi_('認証: トークン失敗');
-      void syncDataScopeForAuth_({ suppressToast: true });
-    });
+    void applyAuthUserState_(user, { syncScope: true });
   });
 
   try {
     const redirectResult = await firebaseAuth.getRedirectResult();
     if (redirectResult && redirectResult.user) {
-      signedInUser = redirectResult.user;
-      try {
-        signedInIdToken = String(await redirectResult.user.getIdToken() || '');
-      } catch (_error) {
-        signedInIdToken = '';
-      }
-      const email = String(redirectResult.user.email || '').trim();
-      updateAuthUi_(email ? ('認証: ' + email) : '認証: ログイン済み');
-      void syncDataScopeForAuth_({ suppressToast: true });
+      await applyAuthUserState_(redirectResult.user, { syncScope: true });
     }
   } catch (error) {
     const code = String(error && error.code ? error.code : '').trim();
@@ -685,17 +661,45 @@ async function initializeAuth_() {
   }
 
   if (!signedInUser && firebaseAuth.currentUser) {
-    signedInUser = firebaseAuth.currentUser;
-    try {
-      signedInIdToken = String(await firebaseAuth.currentUser.getIdToken() || '');
-    } catch (_error) {
-      signedInIdToken = '';
-    }
-    const email = String(firebaseAuth.currentUser.email || '').trim();
-    updateAuthUi_(email ? ('認証: ' + email) : '認証: ログイン済み');
-    void syncDataScopeForAuth_({ suppressToast: true });
+    await applyAuthUserState_(firebaseAuth.currentUser, { syncScope: true });
   }
 
+}
+
+function getAuthStatusLabel_(user) {
+  const email = String(user && user.email ? user.email : '').trim();
+  return email ? ('認証: ' + email) : '認証: ログイン済み';
+}
+
+async function applyAuthUserState_(user, options) {
+  const opts = options || {};
+  signedInUser = user || null;
+  if (!user) {
+    signedInIdToken = '';
+    updateAuthUi_('認証: 未ログイン');
+    if (opts.syncScope) {
+      await syncDataScopeForAuth_({ suppressToast: true });
+    }
+    return;
+  }
+
+  const userUid = String(user.uid || '');
+  updateAuthUi_(getAuthStatusLabel_(user));
+  if (opts.syncScope) {
+    await syncDataScopeForAuth_({ suppressToast: true });
+  }
+
+  try {
+    const token = await user.getIdToken();
+    if (!signedInUser || String(signedInUser.uid || '') !== userUid) return;
+    signedInIdToken = String(token || '');
+    updateAuthUi_(getAuthStatusLabel_(user));
+  } catch (error) {
+    if (!signedInUser || String(signedInUser.uid || '') !== userUid) return;
+    signedInIdToken = '';
+    console.warn('Failed to fetch auth token:', error);
+    updateAuthUi_(getAuthStatusLabel_(user));
+  }
 }
 
 async function signInWithGoogle_() {
@@ -713,7 +717,10 @@ async function signInWithGoogle_() {
   }
 
   try {
-    await firebaseAuth.signInWithPopup(provider);
+    const result = await firebaseAuth.signInWithPopup(provider);
+    if (result && result.user) {
+      await applyAuthUserState_(result.user, { syncScope: true });
+    }
   } catch (error) {
     const code = String(error && error.code ? error.code : '').trim();
     if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
@@ -740,7 +747,7 @@ function updateAuthUi_(statusText) {
   if (authStatus) {
     authStatus.textContent = statusText;
   }
-  const signedIn = Boolean(signedInUser && signedInIdToken);
+  const signedIn = Boolean(signedInUser);
   if (authLoginButton) {
     authLoginButton.style.display = REQUIRE_LOGIN && !signedIn ? 'inline-flex' : 'none';
   }
