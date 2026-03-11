@@ -664,7 +664,26 @@ async function signInWithGoogle_() {
     throw new Error('ログイン設定が未完了です。');
   }
   const provider = new window.firebase.auth.GoogleAuthProvider();
-  await firebaseAuth.signInWithPopup(provider);
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const useRedirect = shouldUseRedirectLogin_();
+
+  if (useRedirect) {
+    showToast('ログイン画面へ移動します...');
+    await firebaseAuth.signInWithRedirect(provider);
+    return;
+  }
+
+  try {
+    await firebaseAuth.signInWithPopup(provider);
+  } catch (error) {
+    const code = String(error && error.code ? error.code : '').trim();
+    if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+      showToast('ポップアップを開けないため、ログイン画面へ移動します...');
+      await firebaseAuth.signInWithRedirect(provider);
+      return;
+    }
+    throw mapFirebaseAuthError_(error);
+  }
 }
 
 async function signOut_() {
@@ -689,6 +708,35 @@ function updateAuthUi_(statusText) {
   if (authLogoutButton) {
     authLogoutButton.style.display = signedIn ? 'inline-flex' : 'none';
   }
+}
+
+function shouldUseRedirectLogin_() {
+  const ua = String(navigator.userAgent || '').toLowerCase();
+  const isIphone = ua.includes('iphone');
+  const isIpad = ua.includes('ipad') || (ua.includes('macintosh') && navigator.maxTouchPoints > 1);
+  const isIos = isIphone || isIpad;
+  const isSafari = ua.includes('safari') && !ua.includes('crios') && !ua.includes('fxios') && !ua.includes('edgios');
+  return isIos && isSafari;
+}
+
+function mapFirebaseAuthError_(error) {
+  const code = String(error && error.code ? error.code : '').trim();
+  if (code === 'auth/unauthorized-domain') {
+    return new Error('このURLはFirebase Authで未許可です。Firebaseの承認済みドメインに追加してください。');
+  }
+  if (code === 'auth/configuration-not-found') {
+    return new Error('Firebase AuthのGoogleログイン設定が未完了です。');
+  }
+  if (code === 'auth/popup-closed-by-user') {
+    return new Error('ログイン画面が閉じられました。');
+  }
+  if (code === 'auth/cancelled-popup-request') {
+    return new Error('ログイン処理がキャンセルされました。');
+  }
+  if (code === 'auth/network-request-failed') {
+    return new Error('通信エラーでログインできませんでした。');
+  }
+  return error instanceof Error ? error : new Error('ログインに失敗しました。');
 }
 
 function isPlaceholderValue_(value) {
