@@ -1,5 +1,6 @@
 let currentData = null;
 let draftStatus = 'unsold';
+let draftDestination = 'home';
 let pending = false;
 let toastTimer = null;
 const AUTO_SAVE_DELAY_MS = 420;
@@ -91,6 +92,9 @@ const quickAddForm = document.getElementById('quickAddForm');
 const quickAddModal = document.getElementById('quickAddModal');
 const openQuickAddButton = document.getElementById('openQuickAddButton');
 const closeQuickAddButton = document.getElementById('closeQuickAddButton');
+const destinationSwitch = document.getElementById('destinationSwitch');
+const monthlyTargetField = document.getElementById('monthlyTargetField');
+const monthlyTargetInput = document.getElementById('monthlyTargetInput');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
 const transportSwitch = document.getElementById('transportSwitch');
@@ -182,6 +186,8 @@ async function init() {
   setArchiveCancelState_(false);
   startAddButtonPeek_();
   setDefaultTransportDate_();
+  setDefaultMonthlyTarget_();
+  applyDraftDestination_(draftDestination);
   applyTransportLedgerPreset_('');
   closeQuickAddModal_({ keepHomeView: true });
   activateView_('home');
@@ -932,6 +938,14 @@ function bindEvents() {
       }
     });
   });
+  if (destinationSwitch) {
+    destinationSwitch.addEventListener('click', function(event) {
+      const button = event.target.closest('button[data-destination-tab]');
+      if (!button) return;
+      const destination = String(button.dataset.destinationTab || '').trim().toLowerCase();
+      applyDraftDestination_(destination);
+    });
+  }
 
   [soldUndoButton, unsoldUndoButton].forEach(function(button) {
     if (!button) return;
@@ -976,6 +990,7 @@ function bindEvents() {
 
   quickAddForm.addEventListener('submit', async function(event) {
     event.preventDefault();
+    const normalizedDestination = (draftDestination === 'monthly') ? 'monthly' : 'home';
     const payload = {
       status: draftStatus,
       name: quickAddForm.name.value.trim(),
@@ -984,21 +999,42 @@ function bindEvents() {
       cost: quickAddForm.cost.value,
       transport: '0'
     };
+    const monthlyTarget = normalizeDraftTargetMonth_(monthlyTargetInput ? monthlyTargetInput.value : '');
     await runApi(async function() {
-      const data = await request('/api/items', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      const addedItemId = findAddedItemId_(currentData, data, payload.status, payload.name);
-      if (addedItemId) {
-        markItemsToBottom_(payload.status, [addedItemId]);
+      let data = null;
+      let addedItemId = '';
+      if (normalizedDestination === 'monthly') {
+        await request('/api/monthly-items', {
+          method: 'POST',
+          body: JSON.stringify({
+            month: monthlyTarget,
+            item: payload
+          })
+        });
+        data = await request('/api/dashboard');
+      } else {
+        data = await request('/api/items', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        addedItemId = findAddedItemId_(currentData, data, payload.status, payload.name);
+        if (addedItemId) {
+          markItemsToBottom_(payload.status, [addedItemId]);
+        }
       }
       setArchiveCancelState_(false);
       quickAddForm.reset();
       shippingInput.value = '160';
       document.querySelector('[data-status-tab="unsold"]').click();
+      applyDraftDestination_('home');
+      setDefaultMonthlyTarget_();
       render(data);
+      await loadMonthlyData_({ silent: true });
       closeQuickAddModal_();
+      if (normalizedDestination === 'monthly') {
+        showToast(monthlyTarget + ' の月別へ追加しました。');
+        return;
+      }
       const targetItemId = addedItemId || findBottomItemIdByStatus_(payload.status);
       setTimeout(function() {
         scrollToItemRowAndAnimate_(
@@ -1673,7 +1709,7 @@ async function refreshDashboardInBackground_() {
     const active = document.activeElement;
     const editingNow = Boolean(
       active &&
-      (active.matches('[data-field]') || active.matches('#nameInput, #revenueInput, #costInput, #shippingInput, #transportInput'))
+      (active.matches('[data-field]') || active.matches('#nameInput, #revenueInput, #costInput, #shippingInput, #transportInput, #monthlyTargetInput'))
     );
     if (editingNow || pending) {
       return;
@@ -1763,9 +1799,37 @@ function getQuickAddTransportAmount_() {
   return sanitizeAmount_(transportInput.value);
 }
 
+function setDefaultMonthlyTarget_() {
+  if (!monthlyTargetInput || monthlyTargetInput.value) return;
+  monthlyTargetInput.value = getCurrentMonthLabel_();
+}
+
+function normalizeDraftTargetMonth_(value) {
+  const month = String(value || '').trim();
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    return month;
+  }
+  return getCurrentMonthLabel_();
+}
+
+function applyDraftDestination_(destination) {
+  const normalized = String(destination || '').trim().toLowerCase() === 'monthly' ? 'monthly' : 'home';
+  draftDestination = normalized;
+  document.querySelectorAll('[data-destination-tab]').forEach(function(button) {
+    button.classList.toggle('active', String(button.dataset.destinationTab || '').trim().toLowerCase() === normalized);
+  });
+  if (monthlyTargetField) {
+    monthlyTargetField.classList.toggle('hidden', normalized !== 'monthly');
+  }
+  if (normalized === 'monthly') {
+    setDefaultMonthlyTarget_();
+  }
+}
+
 function openQuickAddModal_() {
   if (!quickAddModal) return;
   activateView_('home');
+  setDefaultMonthlyTarget_();
   quickAddModal.classList.add('open');
   quickAddModal.setAttribute('aria-hidden', 'false');
   if (quickAddForm && quickAddForm.name) {
@@ -2054,6 +2118,10 @@ async function request(url, options) {
     return firebaseRequest(url, options);
   }
 
+  if (url === '/api/monthly-items' && method === 'POST') {
+    throw new Error('月別への直接追加はFirebaseモードで利用できます。');
+  }
+
   if (backendMode === 'local') {
     const response = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
@@ -2269,6 +2337,9 @@ async function firebaseRequest(url, options) {
   if (url === '/api/items' && method === 'POST') {
     return firebaseSaveItem_(body);
   }
+  if (url === '/api/monthly-items' && method === 'POST') {
+    return firebaseSaveMonthlyItem_(body);
+  }
   if (url.indexOf('/api/items/') === 0 && method === 'DELETE') {
     const itemId = decodeURIComponent(url.split('/').pop() || '');
     return firebaseDeleteItems_([itemId]);
@@ -2346,6 +2417,29 @@ async function firebaseSaveItem_(payload) {
   }
 
   return buildDashboardDataFromItems_(firebaseItemsCache, now);
+}
+
+async function firebaseSaveMonthlyItem_(payload) {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const month = String(source.month || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    throw new Error('対象月は YYYY-MM 形式で入力してください。');
+  }
+  const item = sanitizePayloadForStore_(source.item || {});
+  const now = Date.now();
+  const monthCollection = firebaseArchiveMonthsCollection.doc(month).collection('items');
+  const id = String(item.id || monthCollection.doc().id);
+  await monthCollection.doc(id).set({
+    status: item.status,
+    name: item.name,
+    revenue: item.revenue,
+    shipping: item.shipping,
+    cost: item.cost,
+    transport: item.transport,
+    createdAtMs: now,
+    updatedAtMs: now
+  }, { merge: true });
+  return { ok: true };
 }
 
 async function firebaseDeleteItems_(itemIds) {
@@ -2450,6 +2544,8 @@ async function firebaseArchive_() {
       shipping: item.shipping,
       cost: item.cost,
       transport: item.transport,
+      createdAtMs: toTimestampMs_(item.createdAtMs, archivedAt) || archivedAt,
+      updatedAtMs: archivedAt,
       archivedAtMs: archivedAt,
       archiveToken: archiveToken
     }, { merge: true });
@@ -2547,15 +2643,17 @@ async function firebaseLoadMonthly_() {
         revenue: sanitizeAmount_(data.revenue),
         shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
         cost: sanitizeAmount_(data.cost),
-        transport: sanitizeAmount_(data.transport)
+        transport: sanitizeAmount_(data.transport),
+        createdAtMs: toTimestampMs_(data.createdAtMs),
+        updatedAtMs: toTimestampMs_(data.updatedAtMs)
       };
     });
-    const soldItems = archiveItems
+    const soldItems = sortItemsByCreatedOrder_(archiveItems
       .filter(function(item) { return item.status === 'sold'; })
-      .map(enrichItem_);
-    const unsoldItems = archiveItems
+      .map(enrichItem_));
+    const unsoldItems = sortItemsByCreatedOrder_(archiveItems
       .filter(function(item) { return item.status === 'unsold'; })
-      .map(enrichItem_);
+      .map(enrichItem_));
     monthMap.set(month, {
       month: month,
       summary: buildSummary_(soldItems, unsoldItems),

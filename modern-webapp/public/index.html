@@ -329,6 +329,7 @@
         display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px;
         background: #ece7df; border-radius: 999px; margin-top: 18px;
       }
+      .destination-segmented { margin-top: 0; }
       .segment { background: transparent; color: var(--muted); }
       .segment.active { background: #fff; color: var(--text); }
       .form-grid { display: grid; gap: 12px; margin-top: 18px; }
@@ -883,6 +884,17 @@
         </div>
         <form id="quickAddForm" class="form-grid">
           <div class="field">
+            <label>保存先</label>
+            <div class="segmented destination-segmented" id="destinationSwitch">
+              <button class="segment active" type="button" data-destination-tab="home">ホーム</button>
+              <button class="segment" type="button" data-destination-tab="monthly">月別</button>
+            </div>
+          </div>
+          <div class="field hidden" id="monthlyTargetField">
+            <label for="monthlyTargetInput">対象月</label>
+            <input id="monthlyTargetInput" name="monthlyTarget" type="month">
+          </div>
+          <div class="field">
             <label for="nameInput">名前</label>
             <input id="nameInput" name="name" type="text" placeholder="商品名">
           </div>
@@ -967,6 +979,6 @@
         }
       };
     </script>
-    <script src="./app.js?v=20260311-login11"></script>
+    <script src="./app.js?v=20260311-login12"></script>
   </body>
   </html>
