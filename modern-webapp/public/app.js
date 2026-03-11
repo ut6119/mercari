@@ -2083,6 +2083,7 @@ async function loadMonthlyData_(options) {
   renderMonthlyViews_();
   applyYearlyOverallValue_();
   try {
+    const currentMonth = getCurrentMonthLabel_();
     let data = null;
     if (backendMode === 'firebase' && !opts.forceGas) {
       if (REQUIRE_LOGIN && !signedInUser) {
@@ -2091,14 +2092,43 @@ async function loadMonthlyData_(options) {
         return;
       }
       data = await firebaseLoadMonthly_();
+      let firebaseMonths = normalizeMonthlyEntriesWithoutCurrent_(data && data.months, currentMonth);
+      if (!firebaseMonths.length) {
+        try {
+          const gasData = await loadMonthlyDataFromGas_();
+          const gasMonths = normalizeMonthlyEntriesWithoutCurrent_(gasData && gasData.months, currentMonth);
+          if (gasMonths.length) {
+            data = {
+              months: gasMonths,
+              generatedAt: gasData && gasData.generatedAt ? gasData.generatedAt : formatDateTime_(Date.now())
+            };
+          } else {
+            data = {
+              months: firebaseMonths,
+              generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
+            };
+          }
+        } catch (fallbackError) {
+          console.warn('monthly gas fallback skipped:', fallbackError);
+          data = {
+            months: firebaseMonths,
+            generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
+          };
+        }
+      } else {
+        data = {
+          months: firebaseMonths,
+          generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
+        };
+      }
     } else {
       data = await loadMonthlyDataFromGas_();
+      data = {
+        months: normalizeMonthlyEntriesWithoutCurrent_(data && data.months, currentMonth),
+        generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
+      };
     }
-    const currentMonth = getCurrentMonthLabel_();
-    let months = (Array.isArray(data && data.months) ? data.months : [])
-      .filter(function(entry) {
-        return entry && String(entry.month || '').trim() !== currentMonth;
-      });
+    let months = Array.isArray(data && data.months) ? data.months : [];
     if (requestId !== monthlyLoadRequestId) return;
     monthlyState.months = months;
     if (!months.length) {
@@ -2120,6 +2150,18 @@ async function loadMonthlyData_(options) {
       showToast(error.message || '月別データの取得に失敗しました。');
     }
   }
+}
+
+function normalizeMonthlyEntriesWithoutCurrent_(entries, currentMonth) {
+  const monthLabel = String(currentMonth || '').trim();
+  return (Array.isArray(entries) ? entries : [])
+    .filter(function(entry) {
+      if (!entry) return false;
+      return String(entry.month || '').trim() !== monthLabel;
+    })
+    .sort(function(a, b) {
+      return String((a && a.month) || '').localeCompare(String((b && b.month) || ''));
+    });
 }
 
 async function loadMonthlyDataFromGas_() {
