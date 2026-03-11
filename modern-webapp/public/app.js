@@ -2160,35 +2160,10 @@ async function loadMonthlyData_(options) {
         return;
       }
       data = await firebaseLoadMonthly_();
-      let firebaseMonths = normalizeMonthlyEntriesWithoutCurrent_(data && data.months, currentMonth);
-      if (!firebaseMonths.length) {
-        try {
-          const gasData = await loadMonthlyDataFromGas_();
-          const gasMonths = normalizeMonthlyEntriesWithoutCurrent_(gasData && gasData.months, currentMonth);
-          if (gasMonths.length) {
-            data = {
-              months: gasMonths,
-              generatedAt: gasData && gasData.generatedAt ? gasData.generatedAt : formatDateTime_(Date.now())
-            };
-          } else {
-            data = {
-              months: firebaseMonths,
-              generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
-            };
-          }
-        } catch (fallbackError) {
-          console.warn('monthly gas fallback skipped:', fallbackError);
-          data = {
-            months: firebaseMonths,
-            generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
-          };
-        }
-      } else {
-        data = {
-          months: firebaseMonths,
-          generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
-        };
-      }
+      data = {
+        months: normalizeMonthlyEntriesWithoutCurrent_(data && data.months, currentMonth),
+        generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
+      };
     } else {
       data = await loadMonthlyDataFromGas_();
       data = {
