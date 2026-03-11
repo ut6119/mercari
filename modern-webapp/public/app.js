@@ -2813,11 +2813,9 @@ async function firebaseLoadMonthly_() {
       };
     });
     const soldItems = sortItemsByCreatedOrder_(archiveItems
-      .filter(function(item) { return item.status === 'sold'; })
+      .filter(function(item) { return item.status !== 'unsold'; })
       .map(enrichItem_));
-    const unsoldItems = sortItemsByCreatedOrder_(archiveItems
-      .filter(function(item) { return item.status === 'unsold'; })
-      .map(enrichItem_));
+    const unsoldItems = [];
     monthMap.set(month, {
       month: month,
       summary: buildSummary_(soldItems, unsoldItems),
@@ -2874,11 +2872,9 @@ async function loadMonthlyOrphanEntriesFromCollectionGroup_() {
   const entries = [];
   monthItemsMap.forEach(function(items, month) {
     const soldItems = sortItemsByCreatedOrder_(items
-      .filter(function(item) { return item.status === 'sold'; })
+      .filter(function(item) { return item.status !== 'unsold'; })
       .map(enrichItem_));
-    const unsoldItems = sortItemsByCreatedOrder_(items
-      .filter(function(item) { return item.status === 'unsold'; })
-      .map(enrichItem_));
+    const unsoldItems = [];
     entries.push({
       month: month,
       summary: buildSummary_(soldItems, unsoldItems),
