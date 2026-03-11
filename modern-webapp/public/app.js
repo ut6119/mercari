@@ -657,6 +657,15 @@ async function initializeAuth_() {
     });
   });
 
+  try {
+    await firebaseAuth.getRedirectResult();
+  } catch (error) {
+    const code = String(error && error.code ? error.code : '').trim();
+    if (code !== 'auth/no-auth-event') {
+      showToast(mapFirebaseAuthError_(error).message || 'ログインに失敗しました。');
+    }
+  }
+
 }
 
 async function signInWithGoogle_() {
