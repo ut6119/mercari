@@ -2303,7 +2303,9 @@ async function firebaseLoadDashboard_() {
       revenue: sanitizeAmount_(data.revenue),
       shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
       cost: sanitizeAmount_(data.cost),
-      transport: sanitizeAmount_(data.transport)
+      transport: sanitizeAmount_(data.transport),
+      createdAtMs: toTimestampMs_(data.createdAtMs),
+      updatedAtMs: toTimestampMs_(data.updatedAtMs)
     };
   });
   return buildDashboardDataFromItems_(firebaseItemsCache);
@@ -2517,6 +2519,7 @@ async function firebaseArchiveCancel_() {
       shipping: sanitizeAmount_(data.shipping, DEFAULT_SHIPPING),
       cost: sanitizeAmount_(data.cost),
       transport: sanitizeAmount_(data.transport),
+      createdAtMs: toTimestampMs_(data.createdAtMs, now) || now,
       updatedAtMs: now
     }, { merge: true });
     batch.delete(doc.ref);
@@ -2587,12 +2590,12 @@ function getCurrentMonthLabel_() {
 
 function buildDashboardDataFromItems_(rawItems, updatedAtMs) {
   const items = Array.isArray(rawItems) ? rawItems : [];
-  const soldItems = items
+  const soldItems = sortItemsByCreatedOrder_(items
     .filter(function(item) { return item.status === 'sold'; })
-    .map(enrichItem_);
-  const unsoldItems = items
+    .map(enrichItem_));
+  const unsoldItems = sortItemsByCreatedOrder_(items
     .filter(function(item) { return item.status === 'unsold'; })
-    .map(enrichItem_);
+    .map(enrichItem_));
   const summary = buildSummary_(soldItems, unsoldItems);
   return {
     summary: summary,
@@ -2647,10 +2650,32 @@ function enrichItem_(item) {
     shipping: shipping,
     cost: cost,
     transport: transport,
+    createdAtMs: toTimestampMs_(item.createdAtMs),
+    updatedAtMs: toTimestampMs_(item.updatedAtMs),
     fee: fee,
     profit: profit,
     margin: margin
   };
+}
+
+function toTimestampMs_(value, fallback) {
+  const fallbackMs = Number.isFinite(Number(fallback)) ? Number(fallback) : 0;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallbackMs;
+  }
+  return Math.trunc(parsed);
+}
+
+function sortItemsByCreatedOrder_(items) {
+  return (Array.isArray(items) ? items.slice() : [])
+    .sort(function(a, b) {
+      const createdDiff = toTimestampMs_(a && a.createdAtMs) - toTimestampMs_(b && b.createdAtMs);
+      if (createdDiff !== 0) return createdDiff;
+      const updatedDiff = toTimestampMs_(a && a.updatedAtMs) - toTimestampMs_(b && b.updatedAtMs);
+      if (updatedDiff !== 0) return updatedDiff;
+      return String((a && a.id) || '').localeCompare(String((b && b.id) || ''));
+    });
 }
 
 function buildSummary_(soldItems, unsoldItems) {
