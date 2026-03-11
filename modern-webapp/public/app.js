@@ -21,7 +21,7 @@ const FIREBASE_USER_MONTHS_SUBCOLLECTION = 'months';
 const FIREBASE_USER_META_SUBCOLLECTION = 'meta';
 const FIREBASE_USER_META_DOC = 'state';
 const FIREBASE_USER_TRANSPORT_SUBCOLLECTION = FIREBASE_TRANSPORT_LEDGER_DOC + '_' + FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION;
-const FIREBASE_LEGACY_OWNER_DOC = '__legacy_owner__';
+const FIREBASE_LEGACY_OWNER_DOC = 'legacy_owner';
 const FIREBASE_SDK_VERSION = '10.12.5';
 const FIREBASE_APP_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-app-compat.js';
 const FIREBASE_FIRESTORE_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-firestore-compat.js';
@@ -43,7 +43,7 @@ const ARCHIVE_BUTTON_LABEL_ARCHIVE = '月別へアーカイブ';
 const ARCHIVE_BUTTON_LABEL_CANCEL = 'アーカイブ取消';
 const ARCHIVE_BUTTON_ACTION_ARCHIVE = 'archive';
 const ARCHIVE_BUTTON_ACTION_CANCEL = 'cancel';
-const FIREBASE_ARCHIVE_META_DOC = '__meta__';
+const FIREBASE_ARCHIVE_META_DOC = 'archive_meta';
 
 let backendMode = 'gas';
 let firebaseDb = null;

@@ -6,8 +6,8 @@ service cloud.firestore {
     }
 
     function legacyOwnerUid() {
-      return exists(/databases/$(database)/documents/mercari_archives/__legacy_owner__)
-        ? get(/databases/$(database)/documents/mercari_archives/__legacy_owner__).data.ownerUid
+      return exists(/databases/$(database)/documents/mercari_archives/legacy_owner)
+        ? get(/databases/$(database)/documents/mercari_archives/legacy_owner).data.ownerUid
         : '';
     }
 
@@ -40,14 +40,14 @@ service cloud.firestore {
     match /mercari_archives/transport_ledger {
       allow read, write: if isLegacyOwner();
     }
-    match /mercari_archives/__meta__ {
+    match /mercari_archives/archive_meta {
       allow read, write: if isLegacyOwner();
     }
 
     // Ownership lock for one-time legacy migration.
-    match /mercari_archives/__legacy_owner__ {
+    match /mercari_archives/legacy_owner {
       allow read: if signedIn();
-      allow create: if signedIn() && !exists(/databases/$(database)/documents/mercari_archives/__legacy_owner__);
+      allow create: if signedIn() && !exists(/databases/$(database)/documents/mercari_archives/legacy_owner);
       allow update: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow delete: if false;
     }
