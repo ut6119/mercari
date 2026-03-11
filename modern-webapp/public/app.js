@@ -751,13 +751,11 @@ function updateAuthUi_(statusText) {
 
 function shouldUseRedirectLogin_() {
   const ua = String(navigator.userAgent || '').toLowerCase();
-  const host = String(window.location.hostname || '').toLowerCase();
   const isIphone = ua.includes('iphone');
   const isIpad = ua.includes('ipad') || (ua.includes('macintosh') && navigator.maxTouchPoints > 1);
   const isIos = isIphone || isIpad;
   const isSafari = ua.includes('safari') && !ua.includes('crios') && !ua.includes('fxios') && !ua.includes('edgios');
-  const isGithubPages = host.endsWith('.github.io');
-  return (isIos && isSafari) || isGithubPages;
+  return isIos && isSafari;
 }
 
 function mapFirebaseAuthError_(error) {
