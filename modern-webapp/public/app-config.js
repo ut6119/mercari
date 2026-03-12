@@ -8,6 +8,10 @@ window.APP_RUNTIME_CONFIG = {
   guestMode: {
     enabled: true
   },
+  cameraDemo: {
+    enabled: true,
+    dailyLimit: 3
+  },
   firebase: {
     enabled: true,
     collection: 'mercari_items',
