@@ -12,6 +12,9 @@ const API_WRITE_TOKEN = (window.APP_CONFIG && window.APP_CONFIG.apiWriteToken)
   ? String(window.APP_CONFIG.apiWriteToken).trim()
   : '';
 const REQUIRE_LOGIN = Boolean(window.APP_CONFIG && window.APP_CONFIG.requireLogin);
+const GUEST_MODE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.guestMode) || {};
+const GUEST_MODE_ENABLED = Boolean(GUEST_MODE_OPTIONS.enabled);
+const GUEST_MODE_PREFERENCE_KEY = 'mercari_guest_mode_preference_v1';
 const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
@@ -35,6 +38,9 @@ const APP_TIMEZONE = 'Asia/Tokyo';
 const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
 const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
 const TRANSPORT_PRESET_CONFIG_KEY = 'mercari_transport_preset_config_v1';
+const GUEST_ITEMS_KEY = 'mercari_guest_items_v1';
+const GUEST_MONTHLY_KEY = 'mercari_guest_monthly_v1';
+const GUEST_ARCHIVE_META_KEY = 'mercari_guest_archive_meta_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
 const ENABLE_GIF_EFFECTS = false;
 const ENABLE_CATEGORY_BURST_EFFECTS = true;
@@ -66,6 +72,10 @@ let firebaseAuth = null;
 let signedInUser = null;
 let signedInIdToken = '';
 let authScopeSyncSeq = 0;
+let guestModeActive = resolveGuestModePreference_();
+let guestItemsCache = [];
+let guestMonthlyEntriesCache = [];
+let guestArchiveMeta = null;
 const legacyMigrationCheckedUserIds = new Set();
 const usageBackfillInFlightUserIds = new Set();
 const usageBackfillCompletedUserIds = new Set();
@@ -157,6 +167,8 @@ const burstLayer = document.getElementById('burstLayer');
 const authStatus = document.getElementById('authStatus');
 const authLoginButton = document.getElementById('authLoginButton');
 const authLogoutButton = document.getElementById('authLogoutButton');
+const authGuestButton = document.getElementById('authGuestButton');
+const guestModeNotice = document.getElementById('guestModeNotice');
 const selectionMode = {
   sold: false,
   unsold: false
@@ -197,7 +209,9 @@ init().catch(function(error) {
 
 async function init() {
   setupHeroMascot_();
-  const cachedDashboard = (FIREBASE_OPTIONS.enabled && REQUIRE_LOGIN) ? null : loadCachedDashboard_();
+  const cachedDashboard = (FIREBASE_OPTIONS.enabled && REQUIRE_LOGIN && !guestModeActive)
+    ? null
+    : loadCachedDashboard_();
   if (cachedDashboard) {
     render(cachedDashboard, { skipHistory: true });
   }
@@ -250,8 +264,8 @@ function setupHeroMascot_() {
 }
 
 async function ensureFirebaseSdk_() {
-  const needsAuth = REQUIRE_LOGIN;
-  const needsFirestore = Boolean(FIREBASE_OPTIONS.enabled);
+  const needsAuth = REQUIRE_LOGIN && !guestModeActive;
+  const needsFirestore = Boolean(FIREBASE_OPTIONS.enabled && !guestModeActive);
   const needsAppCheck = Boolean(needsFirestore && FIREBASE_OPTIONS.appCheck && FIREBASE_OPTIONS.appCheck.enabled);
   if (!needsAuth && !needsFirestore && !needsAppCheck) {
     return;
@@ -308,6 +322,58 @@ function activateView_(viewName) {
   if (chartView) chartView.classList.toggle('active', target === 'chart');
 }
 
+function resolveGuestModePreference_() {
+  if (!GUEST_MODE_ENABLED) {
+    return false;
+  }
+  try {
+    const query = new URLSearchParams(window.location.search || '');
+    const mode = String(query.get('mode') || '').trim().toLowerCase();
+    if (mode === 'guest') {
+      localStorage.setItem(GUEST_MODE_PREFERENCE_KEY, 'guest');
+      return true;
+    }
+    if (mode === 'cloud') {
+      localStorage.setItem(GUEST_MODE_PREFERENCE_KEY, 'cloud');
+      return false;
+    }
+    const saved = String(localStorage.getItem(GUEST_MODE_PREFERENCE_KEY) || '').trim().toLowerCase();
+    return saved === 'guest';
+  } catch (_error) {
+    return false;
+  }
+}
+
+function setGuestModePreference_(enabled) {
+  if (!GUEST_MODE_ENABLED) {
+    guestModeActive = false;
+    return;
+  }
+  guestModeActive = Boolean(enabled);
+  try {
+    localStorage.setItem(GUEST_MODE_PREFERENCE_KEY, guestModeActive ? 'guest' : 'cloud');
+  } catch (_error) {}
+}
+
+function toggleGuestMode_() {
+  if (!GUEST_MODE_ENABLED) {
+    throw new Error('この環境ではゲスト利用は無効です。');
+  }
+  if (guestModeActive) {
+    setGuestModePreference_(false);
+    window.location.reload();
+    return;
+  }
+  const confirmed = window.confirm(
+    'ゲスト利用では、データはこの端末のブラウザ内にのみ保存されます。'
+    + '\nブラウザデータ削除・端末変更・ストレージ整理で消える可能性があります。'
+    + '\n\nこのままゲスト利用を開始しますか？'
+  );
+  if (!confirmed) return;
+  setGuestModePreference_(true);
+  window.location.reload();
+}
+
 function getFirebaseScopedUserId_() {
   const uid = signedInUser && signedInUser.uid ? String(signedInUser.uid).trim() : '';
   if (REQUIRE_LOGIN) {
@@ -322,6 +388,9 @@ function hasFirebaseDataAccess_() {
 }
 
 function getStorageScopeKey_() {
+  if (guestModeActive) {
+    return 'guest_local';
+  }
   if (FIREBASE_OPTIONS.enabled && REQUIRE_LOGIN) {
     const uid = signedInUser && signedInUser.uid ? String(signedInUser.uid).trim() : '';
     return 'firebase_' + (uid || 'signed_out');
@@ -621,6 +690,12 @@ async function initializeBackend() {
     return;
   }
 
+  if (guestModeActive) {
+    initializeGuestLocalState_();
+    backendMode = 'guest';
+    return;
+  }
+
   if (!FIREBASE_OPTIONS.enabled) {
     backendMode = 'gas';
     return;
@@ -675,6 +750,12 @@ function getOrCreateFirebaseApp_(config) {
 
 async function initializeAuth_() {
   updateAuthUi_('認証: 未設定');
+  if (guestModeActive) {
+    signedInUser = null;
+    signedInIdToken = '';
+    updateAuthUi_('認証: ゲスト利用中');
+    return;
+  }
   if (!REQUIRE_LOGIN) {
     updateAuthUi_('認証: 任意');
     return;
@@ -828,17 +909,27 @@ function updateAuthUi_(statusText) {
     if (authStatus && authStatus.parentElement) {
       authStatus.parentElement.style.display = 'none';
     }
+    if (guestModeNotice) {
+      guestModeNotice.hidden = true;
+    }
     return;
   }
   if (authStatus) {
     authStatus.textContent = statusText;
   }
+  if (guestModeNotice) {
+    guestModeNotice.hidden = !guestModeActive;
+  }
   const signedIn = Boolean(signedInUser);
   if (authLoginButton) {
-    authLoginButton.style.display = REQUIRE_LOGIN && !signedIn ? 'inline-flex' : 'none';
+    authLoginButton.style.display = REQUIRE_LOGIN && !guestModeActive && !signedIn ? 'inline-flex' : 'none';
   }
   if (authLogoutButton) {
-    authLogoutButton.style.display = signedIn ? 'inline-flex' : 'none';
+    authLogoutButton.style.display = !guestModeActive && signedIn ? 'inline-flex' : 'none';
+  }
+  if (authGuestButton) {
+    authGuestButton.style.display = GUEST_MODE_ENABLED ? 'inline-flex' : 'none';
+    authGuestButton.textContent = guestModeActive ? 'クラウド利用へ' : 'ゲスト利用';
   }
 }
 
@@ -903,6 +994,11 @@ function activateFirebaseAppCheck_(app, options) {
 }
 
 function bindEvents() {
+  if (authGuestButton) {
+    authGuestButton.addEventListener('click', function() {
+      toggleGuestMode_();
+    });
+  }
   if (authLoginButton) {
     authLoginButton.addEventListener('click', function() {
       void runApi(async function() {
@@ -2507,10 +2603,448 @@ function setDefaultTransportDate_() {
   transportDateInput.value = getTodayDateInput_();
 }
 
+function initializeGuestLocalState_() {
+  guestItemsCache = loadGuestItemsCache_();
+  guestMonthlyEntriesCache = loadGuestMonthlyEntriesCache_();
+  guestArchiveMeta = loadGuestArchiveMeta_();
+}
+
+function loadGuestItemsCache_() {
+  try {
+    const raw = localStorage.getItem(getScopedStorageKey_(GUEST_ITEMS_KEY));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map(function(item) { return normalizeGuestItem_(item); })
+      .filter(Boolean);
+  } catch (_error) {
+    return [];
+  }
+}
+
+function saveGuestItemsCache_() {
+  try {
+    localStorage.setItem(getScopedStorageKey_(GUEST_ITEMS_KEY), JSON.stringify(guestItemsCache));
+  } catch (_error) {}
+}
+
+function loadGuestMonthlyEntriesCache_() {
+  try {
+    const raw = localStorage.getItem(getScopedStorageKey_(GUEST_MONTHLY_KEY));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return normalizeGuestMonthlyEntries_(parsed);
+  } catch (_error) {
+    return [];
+  }
+}
+
+function saveGuestMonthlyEntriesCache_() {
+  try {
+    localStorage.setItem(getScopedStorageKey_(GUEST_MONTHLY_KEY), JSON.stringify(guestMonthlyEntriesCache));
+  } catch (_error) {}
+}
+
+function loadGuestArchiveMeta_() {
+  try {
+    const raw = localStorage.getItem(getScopedStorageKey_(GUEST_ARCHIVE_META_KEY));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      month: String(parsed.month || '').trim(),
+      archivedAtMs: toTimestampMs_(parsed.archivedAtMs),
+      archiveToken: String(parsed.archiveToken || '').trim(),
+      itemIds: normalizeIds_(parsed.itemIds || [])
+    };
+  } catch (_error) {
+    return null;
+  }
+}
+
+function saveGuestArchiveMeta_() {
+  try {
+    if (!guestArchiveMeta) {
+      localStorage.removeItem(getScopedStorageKey_(GUEST_ARCHIVE_META_KEY));
+      return;
+    }
+    localStorage.setItem(getScopedStorageKey_(GUEST_ARCHIVE_META_KEY), JSON.stringify(guestArchiveMeta));
+  } catch (_error) {}
+}
+
+function normalizeGuestItem_(source) {
+  if (!source || typeof source !== 'object') return null;
+  const id = String(source.id || '').trim();
+  const name = String(source.name || '').trim();
+  if (!id || !name) return null;
+  return {
+    id: id,
+    status: normalizeStatusValue_(source.status) || 'unsold',
+    name: name,
+    revenue: sanitizeAmount_(source.revenue),
+    shipping: sanitizeAmount_(source.shipping, DEFAULT_SHIPPING),
+    cost: sanitizeAmount_(source.cost),
+    transport: sanitizeAmount_(source.transport),
+    createdAtMs: toTimestampMs_(source.createdAtMs),
+    updatedAtMs: toTimestampMs_(source.updatedAtMs)
+  };
+}
+
+function normalizeGuestMonthlyEntries_(entries) {
+  return (Array.isArray(entries) ? entries : [])
+    .map(function(entry) {
+      const month = String(entry && entry.month ? entry.month : '').trim();
+      if (!/^\d{4}-\d{2}$/.test(month)) {
+        return null;
+      }
+      const items = (Array.isArray(entry && entry.items) ? entry.items : [])
+        .map(function(item) { return normalizeGuestItem_(item); })
+        .filter(Boolean);
+      return {
+        month: month,
+        items: items,
+        updatedAtMs: toTimestampMs_(entry && entry.updatedAtMs)
+      };
+    })
+    .filter(Boolean)
+    .sort(function(a, b) {
+      return String(a.month || '').localeCompare(String(b.month || ''));
+    });
+}
+
+function getGuestMonthlyEntryByMonth_(month) {
+  const target = String(month || '').trim();
+  if (!target) return null;
+  return guestMonthlyEntriesCache.find(function(entry) {
+    return String(entry && entry.month ? entry.month : '') === target;
+  }) || null;
+}
+
+function ensureGuestMonthlyEntryByMonth_(month, nowMs) {
+  const target = String(month || '').trim();
+  let entry = getGuestMonthlyEntryByMonth_(target);
+  if (entry) {
+    entry.updatedAtMs = toTimestampMs_(nowMs, Date.now()) || Date.now();
+    return entry;
+  }
+  entry = {
+    month: target,
+    items: [],
+    updatedAtMs: toTimestampMs_(nowMs, Date.now()) || Date.now()
+  };
+  guestMonthlyEntriesCache.push(entry);
+  guestMonthlyEntriesCache.sort(function(a, b) {
+    return String(a.month || '').localeCompare(String(b.month || ''));
+  });
+  return entry;
+}
+
+function createGuestItemId_() {
+  return 'g_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+}
+
+async function guestRequest(url, options) {
+  const method = String((options && options.method) || 'GET').toUpperCase();
+  const body = options && options.body ? JSON.parse(options.body) : {};
+
+  if (url === '/api/dashboard' && method === 'GET') {
+    return buildDashboardDataFromItems_(guestItemsCache);
+  }
+  if (url === '/api/items' && method === 'POST') {
+    const item = sanitizePayloadForStore_(body);
+    const now = Date.now();
+    const id = String(item.id || createGuestItemId_());
+    const existing = guestItemsCache.find(function(candidate) { return candidate.id === id; });
+    const stored = {
+      id: id,
+      status: item.status,
+      name: item.name,
+      revenue: item.revenue,
+      shipping: item.shipping,
+      cost: item.cost,
+      transport: item.transport,
+      createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : now,
+      updatedAtMs: now
+    };
+    if (existing) {
+      Object.assign(existing, stored);
+    } else {
+      guestItemsCache.push(stored);
+    }
+    saveGuestItemsCache_();
+    return buildDashboardDataFromItems_(guestItemsCache, now);
+  }
+  if (url.indexOf('/api/items/') === 0 && method === 'DELETE') {
+    const itemId = decodeURIComponent(url.split('/').pop() || '');
+    const ids = normalizeIds_([itemId]);
+    if (!ids.length) {
+      throw new Error('削除対象がありません。');
+    }
+    const idSet = new Set(ids);
+    guestItemsCache = guestItemsCache.filter(function(item) {
+      return !idSet.has(item.id);
+    });
+    saveGuestItemsCache_();
+    return buildDashboardDataFromItems_(guestItemsCache);
+  }
+  if (url === '/api/items/bulk' && method === 'POST') {
+    if (body.action === 'deleteMany') {
+      const ids = normalizeIds_(body.itemIds || []);
+      if (!ids.length) {
+        throw new Error('削除対象がありません。');
+      }
+      const idSet = new Set(ids);
+      guestItemsCache = guestItemsCache.filter(function(item) {
+        return !idSet.has(item.id);
+      });
+      saveGuestItemsCache_();
+      return buildDashboardDataFromItems_(guestItemsCache);
+    }
+    if (body.action === 'moveMany') {
+      const ids = normalizeIds_(body.itemIds || []);
+      const normalizedStatus = normalizeStatusValue_(body.targetStatus);
+      if (!ids.length) {
+        throw new Error('移動対象がありません。');
+      }
+      if (normalizedStatus !== 'sold' && normalizedStatus !== 'unsold') {
+        throw new Error('移動先ステータスが不正です。');
+      }
+      const now = Date.now();
+      const idSet = new Set(ids);
+      const moving = guestItemsCache.filter(function(item) {
+        return idSet.has(item.id);
+      });
+      if (!moving.length) {
+        throw new Error('対象の商品が見つかりません。');
+      }
+      if (normalizedStatus === 'sold') {
+        const invalid = moving.find(function(item) {
+          return sanitizeAmount_(item.revenue) <= 0;
+        });
+        if (invalid) {
+          throw new Error('販売済みに移動する行は売上を入力してください。');
+        }
+      }
+      guestItemsCache.forEach(function(item) {
+        if (idSet.has(item.id)) {
+          item.status = normalizedStatus;
+          item.updatedAtMs = now;
+        }
+      });
+      saveGuestItemsCache_();
+      return buildDashboardDataFromItems_(guestItemsCache, now);
+    }
+    throw new Error('未対応の一括処理です。');
+  }
+  if (url === '/api/archive' && method === 'POST') {
+    const soldItems = guestItemsCache.filter(function(item) {
+      return item.status === 'sold';
+    });
+    const month = getLastMonthLabel_();
+    const archivedAt = Date.now();
+    const archiveToken = 'arc_' + archivedAt.toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    const itemIds = soldItems.map(function(item) { return String(item.id || '').trim(); }).filter(Boolean);
+    guestArchiveMeta = {
+      month: month,
+      archivedAtMs: archivedAt,
+      archiveToken: archiveToken,
+      itemIds: itemIds
+    };
+    saveGuestArchiveMeta_();
+    if (!soldItems.length) {
+      return buildDashboardDataFromItems_(guestItemsCache, archivedAt);
+    }
+    const monthEntry = ensureGuestMonthlyEntryByMonth_(month, archivedAt);
+    soldItems.forEach(function(item) {
+      const archivedItem = Object.assign({}, item, {
+        status: normalizeStatusValue_(item.status) || 'sold',
+        createdAtMs: toTimestampMs_(item.createdAtMs, archivedAt) || archivedAt,
+        updatedAtMs: archivedAt,
+        archivedAtMs: archivedAt,
+        archiveToken: archiveToken
+      });
+      const index = monthEntry.items.findIndex(function(existing) {
+        return existing.id === archivedItem.id;
+      });
+      if (index >= 0) {
+        monthEntry.items[index] = archivedItem;
+      } else {
+        monthEntry.items.push(archivedItem);
+      }
+    });
+    guestItemsCache = guestItemsCache.filter(function(item) {
+      return item.status !== 'sold';
+    });
+    saveGuestItemsCache_();
+    saveGuestMonthlyEntriesCache_();
+    return buildDashboardDataFromItems_(guestItemsCache, archivedAt);
+  }
+  if (url === '/api/archive/cancel' && method === 'POST') {
+    const meta = guestArchiveMeta || null;
+    const month = String(meta && meta.month ? meta.month : '').trim();
+    const archiveToken = String(meta && meta.archiveToken ? meta.archiveToken : '').trim();
+    const itemIds = normalizeIds_(meta && meta.itemIds ? meta.itemIds : []);
+    if (!/^\d{4}-\d{2}$/.test(month) || !archiveToken) {
+      throw new Error('取り消せる月別アーカイブがありません。');
+    }
+    if (!itemIds.length) {
+      guestArchiveMeta = null;
+      saveGuestArchiveMeta_();
+      return buildDashboardDataFromItems_(guestItemsCache);
+    }
+    const monthEntry = getGuestMonthlyEntryByMonth_(month);
+    if (!monthEntry) {
+      throw new Error('取り消せる月別アーカイブがありません。');
+    }
+    const idSet = new Set(itemIds);
+    const restorable = monthEntry.items.filter(function(item) {
+      return idSet.has(String(item.id || '').trim()) && String(item.archiveToken || '').trim() === archiveToken;
+    });
+    if (!restorable.length) {
+      throw new Error('取り消せる月別アーカイブがありません。');
+    }
+    const now = Date.now();
+    restorable.forEach(function(item) {
+      const restored = Object.assign({}, item, {
+        status: normalizeStatusValue_(item.status) || 'sold',
+        createdAtMs: toTimestampMs_(item.createdAtMs, now) || now,
+        updatedAtMs: now
+      });
+      delete restored.archivedAtMs;
+      delete restored.archiveToken;
+      const index = guestItemsCache.findIndex(function(existing) {
+        return existing.id === restored.id;
+      });
+      if (index >= 0) {
+        guestItemsCache[index] = restored;
+      } else {
+        guestItemsCache.push(restored);
+      }
+    });
+    monthEntry.items = monthEntry.items.filter(function(item) {
+      return !(idSet.has(String(item.id || '').trim()) && String(item.archiveToken || '').trim() === archiveToken);
+    });
+    if (!monthEntry.items.length) {
+      guestMonthlyEntriesCache = guestMonthlyEntriesCache.filter(function(entry) {
+        return String(entry.month || '') !== month;
+      });
+    } else {
+      monthEntry.updatedAtMs = now;
+    }
+    guestArchiveMeta = null;
+    saveGuestItemsCache_();
+    saveGuestMonthlyEntriesCache_();
+    saveGuestArchiveMeta_();
+    return buildDashboardDataFromItems_(guestItemsCache, now);
+  }
+  if (url === '/api/monthly-items' && method === 'POST') {
+    const source = body && typeof body === 'object' ? body : {};
+    const month = String(source.month || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new Error('対象月は YYYY-MM 形式で入力してください。');
+    }
+    const item = sanitizePayloadForStore_(source.item || {});
+    const now = Date.now();
+    const monthEntry = ensureGuestMonthlyEntryByMonth_(month, now);
+    const id = String(item.id || createGuestItemId_());
+    const stored = {
+      id: id,
+      status: item.status,
+      name: item.name,
+      revenue: item.revenue,
+      shipping: item.shipping,
+      cost: item.cost,
+      transport: item.transport,
+      createdAtMs: now,
+      updatedAtMs: now
+    };
+    const index = monthEntry.items.findIndex(function(existing) {
+      return existing.id === id;
+    });
+    if (index >= 0) {
+      const previous = monthEntry.items[index];
+      monthEntry.items[index] = Object.assign({}, previous, stored, {
+        createdAtMs: previous && previous.createdAtMs ? previous.createdAtMs : now
+      });
+    } else {
+      monthEntry.items.push(stored);
+    }
+    saveGuestMonthlyEntriesCache_();
+    return { ok: true };
+  }
+  if (url === '/api/monthly-items/bulk' && method === 'POST') {
+    if (body.action !== 'deleteMany') {
+      throw new Error('未対応の月別一括処理です。');
+    }
+    const month = String(body.month || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new Error('対象月が不正です。');
+    }
+    const ids = normalizeIds_(body.itemIds || []);
+    if (!ids.length) {
+      throw new Error('削除対象がありません。');
+    }
+    const monthEntry = getGuestMonthlyEntryByMonth_(month);
+    if (!monthEntry) {
+      return { ok: true };
+    }
+    const idSet = new Set(ids);
+    monthEntry.items = monthEntry.items.filter(function(item) {
+      return !idSet.has(String(item.id || '').trim());
+    });
+    if (!monthEntry.items.length) {
+      guestMonthlyEntriesCache = guestMonthlyEntriesCache.filter(function(entry) {
+        return String(entry.month || '') !== month;
+      });
+    } else {
+      monthEntry.updatedAtMs = Date.now();
+    }
+    saveGuestMonthlyEntriesCache_();
+    return { ok: true };
+  }
+
+  throw new Error('未対応のAPI呼び出しです。');
+}
+
+function guestLoadMonthly_() {
+  const months = guestMonthlyEntriesCache
+    .map(function(entry) {
+      const month = String(entry && entry.month ? entry.month : '').trim();
+      if (!/^\d{4}-\d{2}$/.test(month)) {
+        return null;
+      }
+      const allItems = (Array.isArray(entry && entry.items) ? entry.items : [])
+        .map(function(item) { return normalizeGuestItem_(item); })
+        .filter(Boolean);
+      const soldItems = sortItemsByCreatedOrder_(allItems
+        .filter(function(item) { return item.status !== 'unsold'; })
+        .map(enrichItem_));
+      const unsoldItems = [];
+      return {
+        month: month,
+        summary: buildSummary_(soldItems, unsoldItems),
+        soldItems: soldItems,
+        unsoldItems: unsoldItems
+      };
+    })
+    .filter(Boolean)
+    .sort(function(a, b) {
+      return String(a.month || '').localeCompare(String(b.month || ''));
+    });
+  return {
+    months: months,
+    generatedAt: formatDateTime_(Date.now())
+  };
+}
+
 async function request(url, options) {
   const method = String((options && options.method) || 'GET').toUpperCase();
   if (backendMode === 'firebase-required') {
     throw new Error('Firebase接続に失敗しました。設定を確認してください。');
+  }
+  if (backendMode === 'guest') {
+    return guestRequest(url, options);
   }
   if (backendMode === 'firebase' && REQUIRE_LOGIN && !signedInUser) {
     throw new Error('データ表示にはGoogleログインが必要です。');
@@ -2564,7 +3098,13 @@ async function loadMonthlyData_(options) {
   try {
     const currentMonth = getCurrentMonthLabel_();
     let data = null;
-    if (backendMode === 'firebase' && !opts.forceGas) {
+    if (backendMode === 'guest') {
+      data = guestLoadMonthly_();
+      data = {
+        months: normalizeMonthlyEntriesWithoutCurrent_(data && data.months, currentMonth),
+        generatedAt: data && data.generatedAt ? data.generatedAt : formatDateTime_(Date.now())
+      };
+    } else if (backendMode === 'firebase' && !opts.forceGas) {
       if (REQUIRE_LOGIN && !signedInUser) {
         if (requestId !== monthlyLoadRequestId) return;
         resetMonthlyState_();

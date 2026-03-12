@@ -5,6 +5,9 @@ window.APP_RUNTIME_CONFIG = {
   apiWriteToken: ['cfef1157e29cbc2ef2ffb01d32811a7dbd7ea47ea405439e'].join(''),
   requireLogin: true,
   heroGifUrl: '',
+  guestMode: {
+    enabled: true
+  },
   firebase: {
     enabled: true,
     collection: 'mercari_items',

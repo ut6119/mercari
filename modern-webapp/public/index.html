@@ -151,6 +151,16 @@
         font-size: 12px;
         border-radius: 999px;
       }
+      .guest-mode-notice {
+        margin-top: 8px;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #7a4a00;
+        background: #fff3d8;
+        border: 1px solid #f2d08b;
+        border-radius: 10px;
+        padding: 8px 10px;
+      }
       .button, button {
         appearance: none; border: 0; border-radius: 999px; padding: 12px 18px; font-weight: 700;
         cursor: pointer; transition: transform 120ms ease, opacity 120ms ease;
@@ -727,6 +737,10 @@
           <span id="authStatus" class="auth-status">認証: 確認中</span>
           <button class="button button-secondary auth-button" id="authLoginButton" type="button">Googleログイン</button>
           <button class="button button-secondary auth-button" id="authLogoutButton" type="button">ログアウト</button>
+          <button class="button button-secondary auth-button" id="authGuestButton" type="button">ゲスト利用</button>
+        </div>
+        <div class="guest-mode-notice" id="guestModeNotice" hidden>
+          ゲスト利用中: データはこの端末のブラウザ内に保存されます。ブラウザデータ削除・端末変更・ストレージ整理で消える可能性があります。
         </div>
 
         <div class="stats">
@@ -1061,13 +1075,16 @@
     </div>
     <div class="burst-layer" id="burstLayer" aria-hidden="true"></div>
     <div class="toast" id="toast"></div>
-    <script src="./app-config.js?v=20260311-login"></script>
+    <script src="./app-config.js?v=20260312-guest01"></script>
     <script>
       var defaultConfig = {
         gasEndpoint: 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec',
         apiWriteToken: '',
         requireLogin: true,
         heroGifUrl: './assets/mascot.gif',
+        guestMode: {
+          enabled: true
+        },
         firebase: {
           enabled: false,
           collection: 'mercari_items',
@@ -1101,6 +1118,7 @@
       var runtimeFirebase = runtimeConfig.firebase || {};
       var runtimeFirebaseConfig = runtimeFirebase.config || {};
       var runtimeFirebaseAppCheck = runtimeFirebase.appCheck || {};
+      var runtimeGuestMode = runtimeConfig.guestMode || {};
       var appConfig = {
         environment: envMode,
         gasEndpoint: runtimeConfig.gasEndpoint || defaultConfig.gasEndpoint,
@@ -1109,6 +1127,11 @@
           ? runtimeConfig.requireLogin
           : defaultConfig.requireLogin,
         heroGifUrl: runtimeConfig.heroGifUrl || defaultConfig.heroGifUrl,
+        guestMode: {
+          enabled: typeof runtimeGuestMode.enabled === 'boolean'
+            ? runtimeGuestMode.enabled
+            : defaultConfig.guestMode.enabled
+        },
         firebase: {
           enabled: typeof runtimeFirebase.enabled === 'boolean'
             ? runtimeFirebase.enabled
@@ -1148,6 +1171,6 @@
         envBanner.textContent = 'MODEL APP: テスト環境です（本番データには反映されません）';
       }
     </script>
-    <script src="./app.js?v=20260311-ai03"></script>
+    <script src="./app.js?v=20260312-guest01"></script>
   </body>
 </html>
