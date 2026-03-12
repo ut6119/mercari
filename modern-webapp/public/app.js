@@ -15,6 +15,7 @@ const REQUIRE_LOGIN = Boolean(window.APP_CONFIG && window.APP_CONFIG.requireLogi
 const GUEST_MODE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.guestMode) || {};
 const GUEST_MODE_ENABLED = Boolean(GUEST_MODE_OPTIONS.enabled);
 const GUEST_MODE_PREFERENCE_KEY = 'mercari_guest_mode_preference_v1';
+const GUEST_TO_CLOUD_AUTOLOGIN_KEY = 'mercari_guest_to_cloud_autologin_v1';
 const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
@@ -209,6 +210,7 @@ init().catch(function(error) {
 
 async function init() {
   setupHeroMascot_();
+  const autoLoginFromGuestSwitch = consumeGuestToCloudAutoLogin_();
   const cachedDashboard = (FIREBASE_OPTIONS.enabled && REQUIRE_LOGIN && !guestModeActive)
     ? null
     : loadCachedDashboard_();
@@ -218,6 +220,15 @@ async function init() {
   await ensureFirebaseSdk_();
   await initializeAuth_();
   await initializeBackend();
+  if (autoLoginFromGuestSwitch
+    && REQUIRE_LOGIN
+    && !guestModeActive
+    && backendMode === 'firebase'
+    && !signedInUser) {
+    updateAuthUi_('認証: ログイン画面へ移動中...');
+    await signInWithGoogle_({ preferRedirect: true });
+    return;
+  }
   await initializeTransportPresetConfig_();
   bindEvents();
   setArchiveCancelState_(false);
@@ -355,13 +366,32 @@ function setGuestModePreference_(enabled) {
   } catch (_error) {}
 }
 
+function markGuestToCloudAutoLogin_() {
+  try {
+    sessionStorage.setItem(GUEST_TO_CLOUD_AUTOLOGIN_KEY, '1');
+  } catch (_error) {}
+}
+
+function consumeGuestToCloudAutoLogin_() {
+  try {
+    const enabled = sessionStorage.getItem(GUEST_TO_CLOUD_AUTOLOGIN_KEY) === '1';
+    sessionStorage.removeItem(GUEST_TO_CLOUD_AUTOLOGIN_KEY);
+    return enabled;
+  } catch (_error) {
+    return false;
+  }
+}
+
 function toggleGuestMode_() {
   if (!GUEST_MODE_ENABLED) {
     throw new Error('この環境ではゲスト利用は無効です。');
   }
   if (guestModeActive) {
     setGuestModePreference_(false);
-    window.location.reload();
+    markGuestToCloudAutoLogin_();
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', 'cloud');
+    window.location.assign(url.toString());
     return;
   }
   const confirmed = window.confirm(
@@ -867,13 +897,14 @@ async function applyAuthUserState_(user, options) {
   }
 }
 
-async function signInWithGoogle_() {
+async function signInWithGoogle_(options) {
+  const opts = options || {};
   if (!firebaseAuth) {
     throw new Error('ログイン設定が未完了です。');
   }
   const provider = new window.firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
-  const useRedirect = shouldUseRedirectLogin_();
+  const useRedirect = Boolean(opts.preferRedirect) || shouldUseRedirectLogin_();
 
   if (useRedirect) {
     showToast('ログイン画面へ移動します...');
