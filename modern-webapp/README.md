@@ -18,6 +18,14 @@ npm run dev
 
 もし `~/.clasprc.json` が無い環境では、`.env` の `GAS_WEBAPP_URL` を使うフォールバックになります。
 
+## モデル版（本番分離）
+
+`/model.html` を開くと、`?env=model` が有効になり、Firestoreの保存先が自動で `*_model` コレクションへ切り替わります。  
+本番と同じ画面で検証できますが、データは分離されます。
+
+- 本番: `/index.html`
+- モデル: `/model.html`（内部的に `/index.html?env=model` へ遷移）
+
 ## GitHub Pages で公開する場合
 
 このフォルダの `public/` は GitHub Pages 用です。  
@@ -79,6 +87,32 @@ service cloud.firestore {
     match /mercari_archives/{uid}/{path=**} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
+
+    // 利用集計（月次追加件数）: mercari_usage/{uid}/months/{YYYY-MM}
+    match /mercari_usage/{uid}/months/{month} {
+      allow read, write: if signedIn()
+        && request.auth.uid == uid
+        && month.matches('^\\d{4}-\\d{2}$');
+    }
+    // 利用集計のユーザープロファイル: mercari_usage_users/{uid}
+    match /mercari_usage_users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+    // モデル版（/model.html）用
+    match /mercari_items_model/{uid}/items/{itemId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+    match /mercari_archives_model/{uid}/{path=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+    match /mercari_usage_model/{uid}/months/{month} {
+      allow read, write: if signedIn()
+        && request.auth.uid == uid
+        && month.matches('^\\d{4}-\\d{2}$');
+    }
+    match /mercari_usage_users_model/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
     // 旧アーカイブ構造（初回移行のみ）
     match /mercari_archives/{month}/items/{itemId} {
       allow read, write: if isLegacyOwner() && month.matches('^\\d{4}-\\d{2}$');
@@ -104,6 +138,11 @@ service cloud.firestore {
 }
 ```
 
+利用集計は、商品を新規追加したときに自動で以下へ記録されます。
+
+- `mercari_usage/{uid}/months/{YYYY-MM}`: `addedCount` などの月次件数
+- `mercari_usage_users/{uid}`: `email` / `displayName` / `lastSeenAtMs`
+
 ※ 既存共有データは「最初にログインした1ユーザー」に自動移行されます。  
 ※ 2人目以降は自分専用の空データから開始します。
 
@@ -121,3 +160,37 @@ service cloud.firestore {
 - `public/index.html` には実キーを書かない（プレースホルダ固定）
 - 実運用値は `.env` の `PUBLIC_*` で注入する
 - `.env` はGit管理しない（`.gitignore` 済み）
+
+## 利用集計レポート（ユーザー別/月別）
+
+商品を新規追加すると、次のコレクションに月次件数が自動保存されます。
+
+- `mercari_usage/{uid}/months/{YYYY-MM}`
+- `mercari_usage_users/{uid}`
+- モデル版はそれぞれ `*_model` コレクション
+
+初回ログイン時は、既存の `items`（在庫 + 月別アーカイブ）から月次件数を自動で補完します。
+※ すでに削除済みの項目は補完対象に含まれません。
+
+管理者側で集計を確認するには、`GOOGLE_SERVICE_ACCOUNT_JSON` を `.env` に設定した上で実行してください。
+
+```bash
+cd modern-webapp
+npm run usage:report
+```
+
+フィルタ例:
+
+```bash
+# 指定メールのユーザーのみ
+npm run usage:report -- --email=user-a@example.com
+
+# 指定UID + 指定月
+npm run usage:report -- --uid=<firebase_uid> --month=2026-03
+```
+
+## モデル先行で本番反映する運用
+
+1. まず `/model.html` でのみ挙動変更を有効化して実装する
+2. モデル版で確認してもらう
+3. 「本番反映OK」の指示後に `/index.html` 側にも同じ変更を反映する

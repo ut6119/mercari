@@ -16,6 +16,8 @@ const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
 const FIREBASE_ARCHIVE_COLLECTION = FIREBASE_OPTIONS.archiveCollection || 'mercari_archives';
+const FIREBASE_USAGE_COLLECTION = FIREBASE_OPTIONS.usageCollection || 'mercari_usage';
+const FIREBASE_USAGE_USERS_COLLECTION = FIREBASE_OPTIONS.usageUsersCollection || 'mercari_usage_users';
 const FIREBASE_TRANSPORT_LEDGER_DOC = FIREBASE_OPTIONS.transportLedgerDoc || 'transport_ledger';
 const FIREBASE_TRANSPORT_LEDGER_SUBCOLLECTION = FIREBASE_OPTIONS.transportLedgerSubcollection || 'items';
 const FIREBASE_USER_MONTHS_SUBCOLLECTION = 'months';
@@ -55,6 +57,8 @@ let firebaseTransportLedgerCollection = null;
 let firebaseArchiveMonthsCollection = null;
 let firebaseArchiveMetaRef = null;
 let firebaseTransportPresetRef = null;
+let firebaseUsageMonthsCollection = null;
+let firebaseUsageUserRef = null;
 let firebaseActiveUserId = '';
 let firebaseItemsCache = [];
 let authFirebaseApp = null;
@@ -63,6 +67,8 @@ let signedInUser = null;
 let signedInIdToken = '';
 let authScopeSyncSeq = 0;
 const legacyMigrationCheckedUserIds = new Set();
+const usageBackfillInFlightUserIds = new Set();
+const usageBackfillCompletedUserIds = new Set();
 const monthlyState = {
   months: [],
   selectedMonth: '',
@@ -355,6 +361,8 @@ function refreshFirebaseCollectionsForCurrentUser_() {
     firebaseArchiveMonthsCollection = null;
     firebaseArchiveMetaRef = null;
     firebaseTransportPresetRef = null;
+    firebaseUsageMonthsCollection = null;
+    firebaseUsageUserRef = null;
     firebaseActiveUserId = '';
     return;
   }
@@ -365,6 +373,8 @@ function refreshFirebaseCollectionsForCurrentUser_() {
     firebaseArchiveMonthsCollection = null;
     firebaseArchiveMetaRef = null;
     firebaseTransportPresetRef = null;
+    firebaseUsageMonthsCollection = null;
+    firebaseUsageUserRef = null;
     firebaseActiveUserId = '';
     return;
   }
@@ -373,7 +383,9 @@ function refreshFirebaseCollectionsForCurrentUser_() {
     && firebaseArchiveMonthsCollection
     && firebaseTransportLedgerCollection
     && firebaseArchiveMetaRef
-    && firebaseTransportPresetRef) {
+    && firebaseTransportPresetRef
+    && firebaseUsageMonthsCollection
+    && firebaseUsageUserRef) {
     return;
   }
   firebaseActiveUserId = userId;
@@ -388,6 +400,13 @@ function refreshFirebaseCollectionsForCurrentUser_() {
     .doc(FIREBASE_USER_META_DOC);
   firebaseTransportLedgerCollection = userArchiveRoot.collection(FIREBASE_USER_TRANSPORT_SUBCOLLECTION);
   firebaseTransportPresetRef = userArchiveRoot.collection(FIREBASE_USER_META_SUBCOLLECTION).doc('transport_presets');
+  firebaseUsageMonthsCollection = firebaseDb
+    .collection(FIREBASE_USAGE_COLLECTION)
+    .doc(userId)
+    .collection(FIREBASE_USER_MONTHS_SUBCOLLECTION);
+  firebaseUsageUserRef = firebaseDb
+    .collection(FIREBASE_USAGE_USERS_COLLECTION)
+    .doc(userId);
 }
 
 async function runFirestoreMutations_(mutations) {
@@ -751,6 +770,8 @@ async function applyAuthUserState_(user, options) {
   if (opts.syncScope) {
     await syncDataScopeForAuth_({ suppressToast: true });
   }
+  void firebaseSyncUsageUserProfile_(user);
+  void firebaseBackfillUsageFromExistingItems_();
 
   try {
     const token = await user.getIdToken();
@@ -2753,6 +2774,146 @@ async function firebaseLoadDashboard_() {
   return buildDashboardDataFromItems_(firebaseItemsCache);
 }
 
+async function firebaseSyncUsageUserProfile_(user) {
+  if (!user || backendMode !== 'firebase' || !firebaseUsageUserRef) {
+    return;
+  }
+  const now = Date.now();
+  const uid = String(user.uid || '').trim();
+  if (!uid) {
+    return;
+  }
+  const email = String(user.email || '').trim().toLowerCase();
+  const displayName = String(user.displayName || '').trim();
+  const photoURL = String(user.photoURL || '').trim();
+  try {
+    await firebaseUsageUserRef.set({
+      uid: uid,
+      email: email,
+      displayName: displayName,
+      photoURL: photoURL,
+      lastSeenAtMs: now,
+      updatedAtMs: now
+    }, { merge: true });
+  } catch (error) {
+    console.warn('Failed to sync usage profile:', error);
+  }
+}
+
+async function firebaseRecordMonthlyAddition_(addedAtMs) {
+  if (backendMode !== 'firebase' || !firebaseDb || !firebaseUsageMonthsCollection || !firebaseActiveUserId) {
+    return;
+  }
+  const now = toTimestampMs_(addedAtMs, Date.now()) || Date.now();
+  const month = getCurrentMonthLabel_(now);
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    return;
+  }
+  const monthRef = firebaseUsageMonthsCollection.doc(month);
+  try {
+    await firebaseDb.runTransaction(async function(transaction) {
+      const snapshot = await transaction.get(monthRef);
+      const data = snapshot.exists ? (snapshot.data() || {}) : {};
+      const currentCount = sanitizeAmount_(data.addedCount);
+      const firstAddedAtMs = snapshot.exists
+        ? (toTimestampMs_(data.firstAddedAtMs, now) || now)
+        : now;
+      transaction.set(monthRef, {
+        uid: firebaseActiveUserId,
+        month: month,
+        addedCount: currentCount + 1,
+        firstAddedAtMs: firstAddedAtMs,
+        lastAddedAtMs: now,
+        updatedAtMs: now
+      }, { merge: true });
+    });
+  } catch (error) {
+    console.warn('Failed to record monthly usage:', error);
+  }
+}
+
+async function firebaseBackfillUsageFromExistingItems_() {
+  if (backendMode !== 'firebase' || !firebaseDb || !firebaseUsageMonthsCollection || !firebaseActiveUserId) {
+    return;
+  }
+  const uid = String(firebaseActiveUserId || '').trim();
+  if (!uid || usageBackfillInFlightUserIds.has(uid) || usageBackfillCompletedUserIds.has(uid)) {
+    return;
+  }
+  usageBackfillInFlightUserIds.add(uid);
+  try {
+    const snapshot = await firebaseDb.collectionGroup('items').get();
+    const monthAggMap = new Map();
+    snapshot.docs.forEach(function(doc) {
+      const pathInfo = parseUsageTrackableItemPath_(doc && doc.ref ? doc.ref.path : '', uid);
+      if (!pathInfo) return;
+      const data = doc.data() || {};
+      const createdAtMs = toTimestampMs_(data.createdAtMs) || toTimestampMs_(data.updatedAtMs);
+      if (!createdAtMs) return;
+      const month = getCurrentMonthLabel_(createdAtMs);
+      if (!/^\d{4}-\d{2}$/.test(month)) return;
+      const existing = monthAggMap.get(month) || {
+        count: 0,
+        firstAddedAtMs: createdAtMs,
+        lastAddedAtMs: createdAtMs
+      };
+      existing.count += 1;
+      existing.firstAddedAtMs = Math.min(existing.firstAddedAtMs, createdAtMs);
+      existing.lastAddedAtMs = Math.max(existing.lastAddedAtMs, createdAtMs);
+      monthAggMap.set(month, existing);
+    });
+    if (!monthAggMap.size) {
+      usageBackfillCompletedUserIds.add(uid);
+      return;
+    }
+
+    const existingUsageSnapshot = await firebaseUsageMonthsCollection.get();
+    const existingByMonth = new Map();
+    existingUsageSnapshot.docs.forEach(function(doc) {
+      existingByMonth.set(doc.id, doc.data() || {});
+    });
+
+    const now = Date.now();
+    const mutations = [];
+    monthAggMap.forEach(function(agg, month) {
+      const existing = existingByMonth.get(month) || {};
+      const existingCount = sanitizeAmount_(existing.addedCount);
+      const existingFirst = toTimestampMs_(existing.firstAddedAtMs);
+      const existingLast = toTimestampMs_(existing.lastAddedAtMs);
+      const nextCount = Math.max(existingCount, sanitizeAmount_(agg.count));
+      const nextFirst = existingFirst ? Math.min(existingFirst, agg.firstAddedAtMs) : agg.firstAddedAtMs;
+      const nextLast = existingLast ? Math.max(existingLast, agg.lastAddedAtMs) : agg.lastAddedAtMs;
+      const countChanged = nextCount !== existingCount;
+      const firstChanged = nextFirst !== existingFirst;
+      const lastChanged = nextLast !== existingLast;
+      if (!countChanged && !firstChanged && !lastChanged) {
+        return;
+      }
+      mutations.push(function(batch) {
+        batch.set(firebaseUsageMonthsCollection.doc(month), {
+          uid: uid,
+          month: month,
+          addedCount: nextCount,
+          firstAddedAtMs: nextFirst,
+          lastAddedAtMs: nextLast,
+          updatedAtMs: now
+        }, { merge: true });
+      });
+    });
+
+    if (!mutations.length) {
+      usageBackfillCompletedUserIds.add(uid);
+      return;
+    }
+    await runFirestoreMutations_(mutations);
+    usageBackfillCompletedUserIds.add(uid);
+  } catch (error) {
+    console.warn('Failed to backfill monthly usage:', error);
+  } finally {
+    usageBackfillInFlightUserIds.delete(uid);
+  }
+}
+
 async function firebaseSaveItem_(payload) {
   const item = sanitizePayloadForStore_(payload);
   const now = Date.now();
@@ -2785,6 +2946,7 @@ async function firebaseSaveItem_(payload) {
     Object.assign(existing, stored, { updatedAtMs: now });
   } else {
     firebaseItemsCache.push(Object.assign({}, stored, { createdAtMs: now, updatedAtMs: now }));
+    void firebaseRecordMonthlyAddition_(now);
   }
 
   return buildDashboardDataFromItems_(firebaseItemsCache, now);
@@ -2805,7 +2967,9 @@ async function firebaseSaveMonthlyItem_(payload) {
   }, { merge: true });
   const monthCollection = monthRef.collection('items');
   const id = String(item.id || monthCollection.doc().id);
-  await monthCollection.doc(id).set({
+  const monthItemRef = monthCollection.doc(id);
+  const existingSnapshot = await monthItemRef.get();
+  await monthItemRef.set({
     status: item.status,
     name: item.name,
     revenue: item.revenue,
@@ -2815,6 +2979,9 @@ async function firebaseSaveMonthlyItem_(payload) {
     createdAtMs: now,
     updatedAtMs: now
   }, { merge: true });
+  if (!existingSnapshot.exists) {
+    void firebaseRecordMonthlyAddition_(now);
+  }
   return { ok: true };
 }
 
@@ -3144,12 +3311,45 @@ function parseArchiveMonthlyItemPath_(pathValue) {
   };
 }
 
-function getCurrentMonthLabel_() {
+function parseUsageTrackableItemPath_(pathValue, uid) {
+  const path = String(pathValue || '').trim();
+  const userId = String(uid || '').trim();
+  if (!path || !userId) return null;
+  const parts = path.split('/');
+  if (parts.length === 4
+    && parts[0] === FIREBASE_COLLECTION
+    && parts[1] === userId
+    && parts[2] === 'items') {
+    return {
+      source: 'main',
+      itemId: String(parts[3] || '').trim()
+    };
+  }
+  if (parts.length === 6
+    && parts[0] === FIREBASE_ARCHIVE_COLLECTION
+    && parts[1] === userId
+    && parts[2] === FIREBASE_USER_MONTHS_SUBCOLLECTION
+    && /^\d{4}-\d{2}$/.test(String(parts[3] || '').trim())
+    && parts[4] === 'items') {
+    return {
+      source: 'archive',
+      month: String(parts[3] || '').trim(),
+      itemId: String(parts[5] || '').trim()
+    };
+  }
+  return null;
+}
+
+function getCurrentMonthLabel_(ms) {
+  const parsedMs = Number(ms);
+  const baseDate = Number.isFinite(parsedMs) && parsedMs > 0
+    ? new Date(parsedMs)
+    : new Date();
   const parts = new Intl.DateTimeFormat('ja-JP', {
     timeZone: APP_TIMEZONE,
     year: 'numeric',
     month: '2-digit'
-  }).formatToParts(new Date());
+  }).formatToParts(baseDate);
   const year = parts.find(function(part) { return part.type === 'year'; });
   const month = parts.find(function(part) { return part.type === 'month'; });
   const y = year ? String(year.value) : '';

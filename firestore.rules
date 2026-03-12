@@ -19,6 +19,9 @@ service cloud.firestore {
     match /mercari_items/{uid}/items/{itemId} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
+    match /mercari_items_model/{uid}/items/{itemId} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
 
     // Legacy flat items (one-time migration only).
     match /mercari_items/{legacyDocId} {
@@ -27,6 +30,9 @@ service cloud.firestore {
 
     // User scoped archives/transport/meta.
     match /mercari_archives/{uid}/{path=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+    match /mercari_archives_model/{uid}/{path=**} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
@@ -42,6 +48,26 @@ service cloud.firestore {
     }
     match /mercari_archives/archive_meta {
       allow read, write: if isLegacyOwner();
+    }
+
+    // Usage metrics per user/month.
+    match /mercari_usage/{uid}/months/{month} {
+      allow read, write: if signedIn()
+        && request.auth.uid == uid
+        && month.matches('^\\d{4}-\\d{2}$');
+    }
+    match /mercari_usage_model/{uid}/months/{month} {
+      allow read, write: if signedIn()
+        && request.auth.uid == uid
+        && month.matches('^\\d{4}-\\d{2}$');
+    }
+
+    // User profile metadata for usage reports.
+    match /mercari_usage_users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+    match /mercari_usage_users_model/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
     // Ownership lock for one-time legacy migration.

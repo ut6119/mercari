@@ -27,6 +27,23 @@
           radial-gradient(circle at 92% 4%, rgba(20, 184, 166, 0.2), transparent 26%),
           linear-gradient(180deg, #eef3fb 0%, #f9fbff 36%, #f4f7fb 100%);
       }
+      .env-banner {
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.03em;
+      }
+      .env-banner.model {
+        color: #102246;
+        background: linear-gradient(90deg, #ffe37f, #ffd24d);
+        border-bottom: 1px solid rgba(16, 34, 70, 0.25);
+      }
       .shell { width: min(1280px, calc(100vw - 24px)); margin: 24px auto 40px; }
       .hero, .panel {
         background: rgba(255, 255, 255, 0.94);
@@ -697,6 +714,7 @@
     </style>
   </head>
   <body>
+    <div id="envBanner" class="env-banner" hidden></div>
     <div class="shell">
       <section class="hero">
         <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
@@ -1054,6 +1072,8 @@
           enabled: false,
           collection: 'mercari_items',
           archiveCollection: 'mercari_archives',
+          usageCollection: 'mercari_usage',
+          usageUsersCollection: 'mercari_usage_users',
           transportLedgerDoc: 'transport_ledger',
           transportLedgerSubcollection: 'items',
           config: {
@@ -1069,11 +1089,20 @@
           }
         }
       };
+      var query = new URLSearchParams(window.location.search || '');
+      var requestedEnv = String(query.get('env') || '').trim().toLowerCase();
+      var envMode = requestedEnv === 'model' ? 'model' : 'prod';
+      function withSuffixIfNeeded(value, suffix) {
+        var text = String(value || '').trim();
+        if (!text) return text;
+        return text.endsWith(suffix) ? text : (text + suffix);
+      }
       var runtimeConfig = window.APP_RUNTIME_CONFIG || {};
       var runtimeFirebase = runtimeConfig.firebase || {};
       var runtimeFirebaseConfig = runtimeFirebase.config || {};
       var runtimeFirebaseAppCheck = runtimeFirebase.appCheck || {};
-      window.APP_CONFIG = {
+      var appConfig = {
+        environment: envMode,
         gasEndpoint: runtimeConfig.gasEndpoint || defaultConfig.gasEndpoint,
         apiWriteToken: runtimeConfig.apiWriteToken || defaultConfig.apiWriteToken,
         requireLogin: typeof runtimeConfig.requireLogin === 'boolean'
@@ -1086,6 +1115,8 @@
             : defaultConfig.firebase.enabled,
           collection: runtimeFirebase.collection || defaultConfig.firebase.collection,
           archiveCollection: runtimeFirebase.archiveCollection || defaultConfig.firebase.archiveCollection,
+          usageCollection: runtimeFirebase.usageCollection || defaultConfig.firebase.usageCollection,
+          usageUsersCollection: runtimeFirebase.usageUsersCollection || defaultConfig.firebase.usageUsersCollection,
           transportLedgerDoc: runtimeFirebase.transportLedgerDoc || defaultConfig.firebase.transportLedgerDoc,
           transportLedgerSubcollection: runtimeFirebase.transportLedgerSubcollection || defaultConfig.firebase.transportLedgerSubcollection,
           config: {
@@ -1103,6 +1134,19 @@
           }
         }
       };
+      if (envMode === 'model') {
+        appConfig.firebase.collection = withSuffixIfNeeded(appConfig.firebase.collection, '_model');
+        appConfig.firebase.archiveCollection = withSuffixIfNeeded(appConfig.firebase.archiveCollection, '_model');
+        appConfig.firebase.usageCollection = withSuffixIfNeeded(appConfig.firebase.usageCollection, '_model');
+        appConfig.firebase.usageUsersCollection = withSuffixIfNeeded(appConfig.firebase.usageUsersCollection, '_model');
+      }
+      window.APP_CONFIG = appConfig;
+      var envBanner = document.getElementById('envBanner');
+      if (envBanner && envMode === 'model') {
+        envBanner.hidden = false;
+        envBanner.classList.add('model');
+        envBanner.textContent = 'MODEL APP: テスト環境です（本番データには反映されません）';
+      }
     </script>
     <script src="./app.js?v=20260311-ai03"></script>
   </body>

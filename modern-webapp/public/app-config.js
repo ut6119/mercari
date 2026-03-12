@@ -9,6 +9,8 @@ window.APP_RUNTIME_CONFIG = {
     enabled: true,
     collection: 'mercari_items',
     archiveCollection: 'mercari_archives',
+    usageCollection: 'mercari_usage',
+    usageUsersCollection: 'mercari_usage_users',
     transportLedgerDoc: 'transport_ledger',
     transportLedgerSubcollection: 'items',
     config: {
