@@ -16,10 +16,6 @@ const GUEST_MODE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.guestMode) ||
 const GUEST_MODE_ENABLED = Boolean(GUEST_MODE_OPTIONS.enabled);
 const GUEST_MODE_PREFERENCE_KEY = 'mercari_guest_mode_preference_v1';
 const GUEST_TO_CLOUD_AUTOLOGIN_KEY = 'mercari_guest_to_cloud_autologin_v1';
-const APP_ENVIRONMENT = String((window.APP_CONFIG && window.APP_CONFIG.environment) || '').trim().toLowerCase();
-const CAMERA_DEMO_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.cameraDemo) || {};
-const CAMERA_DEMO_ENABLED = APP_ENVIRONMENT === 'model' && Boolean(CAMERA_DEMO_OPTIONS.enabled);
-const CAMERA_DEMO_DAILY_LIMIT = Math.max(0, sanitizeAmount_(CAMERA_DEMO_OPTIONS.dailyLimit, 3));
 const USE_LOCAL_API = window.location.origin === LOCAL_API_ORIGIN;
 const FIREBASE_OPTIONS = (window.APP_CONFIG && window.APP_CONFIG.firebase) || {};
 const FIREBASE_COLLECTION = FIREBASE_OPTIONS.collection || 'mercari_items';
@@ -46,7 +42,6 @@ const TRANSPORT_PRESET_CONFIG_KEY = 'mercari_transport_preset_config_v1';
 const GUEST_ITEMS_KEY = 'mercari_guest_items_v1';
 const GUEST_MONTHLY_KEY = 'mercari_guest_monthly_v1';
 const GUEST_ARCHIVE_META_KEY = 'mercari_guest_archive_meta_v1';
-const CAMERA_DEMO_DAILY_KEY = 'mercari_camera_demo_daily_v1';
 const YEARLY_SUMMARY_YEAR = 2026;
 const ENABLE_GIF_EFFECTS = false;
 const ENABLE_CATEGORY_BURST_EFFECTS = true;
@@ -120,10 +115,6 @@ const statusSwitch = document.getElementById('statusSwitch');
 const destinationSwitch = document.getElementById('destinationSwitch');
 const monthlyTargetField = document.getElementById('monthlyTargetField');
 const monthlyTargetInput = document.getElementById('monthlyTargetInput');
-const cameraDemoBox = document.getElementById('cameraDemoBox');
-const cameraDemoRemaining = document.getElementById('cameraDemoRemaining');
-const cameraDemoInput = document.getElementById('cameraDemoInput');
-const cameraDemoButton = document.getElementById('cameraDemoButton');
 const revenueInput = document.getElementById('revenueInput');
 const shippingInput = document.getElementById('shippingInput');
 const transportSwitch = document.getElementById('transportSwitch');
@@ -240,7 +231,6 @@ async function init() {
   }
   await initializeTransportPresetConfig_();
   bindEvents();
-  void refreshCameraDemoQuotaUi_();
   setArchiveCancelState_(false);
   startAddButtonPeek_();
   setDefaultTransportDate_();
@@ -249,7 +239,6 @@ async function init() {
   renderTransportPresetButtons_();
   applyTransportLedgerPreset_(selectedTransportLedgerPreset);
   closeQuickAddModal_({ keepHomeView: true });
-  applyModelDemoBootstrapFromQuery_();
   activateView_('home');
   document.querySelector('[data-status-tab="unsold"]').click();
   if (backendMode === 'firebase') {
@@ -283,19 +272,6 @@ function setupHeroMascot_() {
   heroMascot.onerror = function() {
     heroMascot.style.display = 'none';
   };
-}
-
-function applyModelDemoBootstrapFromQuery_() {
-  if (APP_ENVIRONMENT !== 'model') {
-    return;
-  }
-  try {
-    const query = new URLSearchParams(window.location.search || '');
-    const demo = String(query.get('demo') || '').trim().toLowerCase();
-    if (demo === 'camera') {
-      openQuickAddModal_();
-    }
-  } catch (_error) {}
 }
 
 async function ensureFirebaseSdk_() {
@@ -462,284 +438,6 @@ function getStorageScopeKey_() {
 
 function getScopedStorageKey_(baseKey) {
   return baseKey + '_' + getStorageScopeKey_();
-}
-
-function getCameraDemoDateKey_() {
-  return getTodayDateInput_();
-}
-
-function getCameraDemoMonthKey_(dateKey) {
-  const key = String(dateKey || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) {
-    return getCurrentMonthLabel_();
-  }
-  return key.slice(0, 7);
-}
-
-function getCameraDemoLocalStorageKey_() {
-  return getScopedStorageKey_(CAMERA_DEMO_DAILY_KEY);
-}
-
-function loadCameraDemoLocalUsage_() {
-  const todayKey = getCameraDemoDateKey_();
-  try {
-    const raw = localStorage.getItem(getCameraDemoLocalStorageKey_());
-    if (!raw) {
-      return { date: todayKey, usedCount: 0 };
-    }
-    const parsed = JSON.parse(raw);
-    const date = String(parsed && parsed.date ? parsed.date : '').trim();
-    if (date !== todayKey) {
-      return { date: todayKey, usedCount: 0 };
-    }
-    return {
-      date: todayKey,
-      usedCount: sanitizeAmount_(parsed && parsed.usedCount)
-    };
-  } catch (_error) {
-    return { date: todayKey, usedCount: 0 };
-  }
-}
-
-function saveCameraDemoLocalUsage_(usage) {
-  const safeUsage = {
-    date: String(usage && usage.date ? usage.date : getCameraDemoDateKey_()).trim(),
-    usedCount: sanitizeAmount_(usage && usage.usedCount)
-  };
-  try {
-    localStorage.setItem(getCameraDemoLocalStorageKey_(), JSON.stringify(safeUsage));
-  } catch (_error) {}
-}
-
-function normalizeCameraDailyUsageMap_(value) {
-  const map = {};
-  if (!value || typeof value !== 'object') {
-    return map;
-  }
-  Object.keys(value).forEach(function(key) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key || '').trim())) {
-      return;
-    }
-    map[String(key)] = sanitizeAmount_(value[key]);
-  });
-  return map;
-}
-
-function hasFirebaseCameraDemoUsage_() {
-  return backendMode === 'firebase'
-    && Boolean(firebaseDb && firebaseUsageMonthsCollection && firebaseActiveUserId && signedInUser);
-}
-
-async function getFirebaseCameraDemoUsedCount_(dateKey) {
-  if (!hasFirebaseCameraDemoUsage_()) {
-    return 0;
-  }
-  const dayKey = String(dateKey || '').trim();
-  const monthKey = getCameraDemoMonthKey_(dayKey);
-  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
-    return 0;
-  }
-  const monthRef = firebaseUsageMonthsCollection.doc(monthKey);
-  const snapshot = await monthRef.get();
-  if (!snapshot.exists) {
-    return 0;
-  }
-  const data = snapshot.data() || {};
-  const usageMap = normalizeCameraDailyUsageMap_(data.cameraDailyCountByDate);
-  return sanitizeAmount_(usageMap[dayKey]);
-}
-
-async function consumeFirebaseCameraDemoQuota_(limit, dateKey) {
-  if (!hasFirebaseCameraDemoUsage_()) {
-    return { allowed: false, usedCount: 0, remaining: 0, limit: limit };
-  }
-  const dayKey = String(dateKey || '').trim();
-  const monthKey = getCameraDemoMonthKey_(dayKey);
-  const monthRef = firebaseUsageMonthsCollection.doc(monthKey);
-  return firebaseDb.runTransaction(async function(transaction) {
-    const snapshot = await transaction.get(monthRef);
-    const data = snapshot.exists ? (snapshot.data() || {}) : {};
-    const usageMap = normalizeCameraDailyUsageMap_(data.cameraDailyCountByDate);
-    const currentCount = sanitizeAmount_(usageMap[dayKey]);
-    if (currentCount >= limit) {
-      return {
-        allowed: false,
-        usedCount: currentCount,
-        remaining: 0,
-        limit: limit
-      };
-    }
-    const nextCount = currentCount + 1;
-    const now = Date.now();
-    usageMap[dayKey] = nextCount;
-    transaction.set(monthRef, {
-      uid: firebaseActiveUserId,
-      month: monthKey,
-      cameraDailyCountByDate: usageMap,
-      updatedAtMs: now
-    }, { merge: true });
-    return {
-      allowed: true,
-      usedCount: nextCount,
-      remaining: Math.max(0, limit - nextCount),
-      limit: limit
-    };
-  });
-}
-
-async function getCameraDemoUsedCount_() {
-  const dateKey = getCameraDemoDateKey_();
-  if (hasFirebaseCameraDemoUsage_()) {
-    try {
-      return await getFirebaseCameraDemoUsedCount_(dateKey);
-    } catch (error) {
-      console.warn('Failed to fetch camera demo usage from Firebase:', error);
-    }
-  }
-  const localUsage = loadCameraDemoLocalUsage_();
-  return sanitizeAmount_(localUsage.usedCount);
-}
-
-async function consumeCameraDemoQuota_() {
-  const limit = CAMERA_DEMO_DAILY_LIMIT;
-  if (limit <= 0) {
-    return { allowed: false, usedCount: 0, remaining: 0, limit: 0 };
-  }
-  const dateKey = getCameraDemoDateKey_();
-  if (hasFirebaseCameraDemoUsage_()) {
-    try {
-      return await consumeFirebaseCameraDemoQuota_(limit, dateKey);
-    } catch (error) {
-      console.warn('Failed to consume camera demo quota in Firebase:', error);
-    }
-  }
-  const localUsage = loadCameraDemoLocalUsage_();
-  const usedCount = sanitizeAmount_(localUsage.usedCount);
-  if (usedCount >= limit) {
-    return {
-      allowed: false,
-      usedCount: usedCount,
-      remaining: 0,
-      limit: limit
-    };
-  }
-  const nextCount = usedCount + 1;
-  saveCameraDemoLocalUsage_({
-    date: dateKey,
-    usedCount: nextCount
-  });
-  return {
-    allowed: true,
-    usedCount: nextCount,
-    remaining: Math.max(0, limit - nextCount),
-    limit: limit
-  };
-}
-
-function setCameraDemoQuotaUi_(remaining, limit) {
-  if (!cameraDemoBox) return;
-  if (!CAMERA_DEMO_ENABLED) {
-    cameraDemoBox.hidden = true;
-    return;
-  }
-  cameraDemoBox.hidden = false;
-  const safeLimit = Math.max(0, sanitizeAmount_(limit, CAMERA_DEMO_DAILY_LIMIT));
-  const safeRemaining = Math.max(0, sanitizeAmount_(remaining));
-  if (cameraDemoRemaining) {
-    cameraDemoRemaining.textContent = '本日残り ' + safeRemaining + ' / ' + safeLimit + ' 件';
-  }
-  if (cameraDemoButton) {
-    cameraDemoButton.disabled = pending || safeRemaining <= 0;
-  }
-}
-
-async function refreshCameraDemoQuotaUi_() {
-  if (!cameraDemoBox) return;
-  if (!CAMERA_DEMO_ENABLED) {
-    cameraDemoBox.hidden = true;
-    return;
-  }
-  const limit = Math.max(0, CAMERA_DEMO_DAILY_LIMIT);
-  try {
-    const usedCount = await getCameraDemoUsedCount_();
-    const remaining = Math.max(0, limit - sanitizeAmount_(usedCount));
-    setCameraDemoQuotaUi_(remaining, limit);
-  } catch (error) {
-    console.warn('Failed to refresh camera demo quota:', error);
-    setCameraDemoQuotaUi_(0, limit);
-  }
-}
-
-function hashTextForDemo_(text) {
-  let hash = 0;
-  const source = String(text || '');
-  for (let i = 0; i < source.length; i += 1) {
-    hash = ((hash << 5) - hash) + source.charCodeAt(i);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-function buildCameraDemoSuggestion_(file) {
-  const presets = [
-    { name: '古着トップス', revenue: 1800, cost: 700 },
-    { name: 'スニーカー', revenue: 4200, cost: 1900 },
-    { name: 'ホビーグッズ', revenue: 2400, cost: 900 },
-    { name: '小型家電', revenue: 3800, cost: 1600 },
-    { name: '雑貨セット', revenue: 1500, cost: 550 }
-  ];
-  const base = String(file && file.name ? file.name : '')
-    + ':' + String(file && file.type ? file.type : '')
-    + ':' + String(file && file.size ? file.size : 0);
-  const hash = hashTextForDemo_(base);
-  const preset = presets[hash % presets.length];
-  const sizeSteps = Math.min(6, Math.floor(sanitizeAmount_(file && file.size) / (220 * 1024)));
-  return {
-    name: preset.name + '（AI候補）',
-    revenue: Math.max(300, preset.revenue + (sizeSteps * 120)),
-    cost: Math.max(50, preset.cost + (sizeSteps * 45)),
-    shipping: DEFAULT_SHIPPING
-  };
-}
-
-function applyCameraDemoSuggestion_(suggestion) {
-  const nameInput = document.getElementById('nameInput');
-  const costInput = document.getElementById('costInput');
-  if (nameInput) {
-    nameInput.value = String(suggestion && suggestion.name ? suggestion.name : '').trim();
-  }
-  if (revenueInput) {
-    revenueInput.value = String(sanitizeAmount_(suggestion && suggestion.revenue));
-  }
-  if (costInput) {
-    costInput.value = String(sanitizeAmount_(suggestion && suggestion.cost));
-  }
-  if (shippingInput) {
-    shippingInput.value = String(sanitizeAmount_(suggestion && suggestion.shipping, DEFAULT_SHIPPING));
-  }
-}
-
-async function handleCameraDemoInputChange_() {
-  if (!cameraDemoInput || !CAMERA_DEMO_ENABLED) {
-    return;
-  }
-  const file = cameraDemoInput.files && cameraDemoInput.files[0]
-    ? cameraDemoInput.files[0]
-    : null;
-  cameraDemoInput.value = '';
-  if (!file) return;
-
-  const quota = await consumeCameraDemoQuota_();
-  if (!quota.allowed) {
-    setCameraDemoQuotaUi_(0, quota.limit);
-    showToast('カメラ判定の本日上限（' + quota.limit + '件）に達しました。手動入力をご利用ください。');
-    return;
-  }
-
-  const suggestion = buildCameraDemoSuggestion_(file);
-  applyCameraDemoSuggestion_(suggestion);
-  setCameraDemoQuotaUi_(quota.remaining, quota.limit);
-  showToast('AI候補を入力しました（本日残り ' + quota.remaining + '件）。');
 }
 
 function resetMonthlyState_() {
@@ -1183,7 +881,6 @@ async function applyAuthUserState_(user, options) {
     if (opts.syncScope) {
       await syncDataScopeForAuth_({ suppressToast: true });
     }
-    void refreshCameraDemoQuotaUi_();
     return;
   }
 
@@ -1192,7 +889,6 @@ async function applyAuthUserState_(user, options) {
   if (opts.syncScope) {
     await syncDataScopeForAuth_({ suppressToast: true });
   }
-  void refreshCameraDemoQuotaUi_();
   void firebaseSyncUsageUserProfile_(user);
   void firebaseBackfillUsageFromExistingItems_();
 
@@ -1337,18 +1033,6 @@ function activateFirebaseAppCheck_(app, options) {
 }
 
 function bindEvents() {
-  if (cameraDemoButton && cameraDemoInput) {
-    cameraDemoButton.addEventListener('click', function() {
-      if (!CAMERA_DEMO_ENABLED) return;
-      cameraDemoInput.value = '';
-      cameraDemoInput.click();
-    });
-    cameraDemoInput.addEventListener('change', function() {
-      void runApi(async function() {
-        await handleCameraDemoInputChange_();
-      });
-    });
-  }
   if (authGuestButton) {
     authGuestButton.addEventListener('click', function() {
       void runApi(async function() {
@@ -4485,14 +4169,13 @@ function togglePending(isPending) {
   const transportButtons = Array.from(document.querySelectorAll('[data-transport-action]'));
   const monthlyButtons = Array.from(document.querySelectorAll('[data-monthly-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
-  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, cameraDemoButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton]
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton]
     .concat(viewTabs, bulkButtons, transportButtons, monthlyButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;
     button.disabled = isPending;
   });
   if (!isPending) {
-    void refreshCameraDemoQuotaUi_();
     updateHistoryButtons_();
   }
 }

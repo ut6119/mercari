@@ -364,44 +364,6 @@
       .field input { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; background: #fff; }
       .field input[readonly] { background: #f2f5fb; color: #44526f; }
       .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-      .camera-demo-box {
-        border: 1px solid #d8dfeb;
-        border-radius: 12px;
-        background: #f6f9ff;
-        padding: 10px;
-        display: grid;
-        gap: 8px;
-      }
-      .camera-demo-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-      }
-      .camera-demo-title {
-        font-size: 12px;
-        font-weight: 800;
-        color: #1f3f78;
-      }
-      .camera-demo-remaining {
-        font-size: 11px;
-        color: #35588f;
-        background: #e7efff;
-        border: 1px solid #c7d7fb;
-        border-radius: 999px;
-        padding: 3px 8px;
-      }
-      .camera-demo-button {
-        justify-self: start;
-        padding: 8px 12px;
-        font-size: 12px;
-      }
-      .camera-demo-note {
-        margin: 0;
-        font-size: 11px;
-        line-height: 1.45;
-        color: #53617a;
-      }
       .quick-add-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
       .transport-ledger-form { margin-top: 12px; }
       .transport-ledger-form .field-row {
@@ -1089,15 +1051,6 @@
             <label for="monthlyTargetInput">対象月</label>
             <input id="monthlyTargetInput" name="monthlyTarget" type="month">
           </div>
-          <div class="camera-demo-box" id="cameraDemoBox" hidden>
-            <div class="camera-demo-head">
-              <div class="camera-demo-title">カメラ判定（デモ）</div>
-              <div class="camera-demo-remaining" id="cameraDemoRemaining">本日残り - 件</div>
-            </div>
-            <input id="cameraDemoInput" type="file" accept="image/*" capture="environment" hidden>
-            <button class="button button-secondary camera-demo-button" id="cameraDemoButton" type="button">撮影してAI候補を入力</button>
-            <p class="camera-demo-note">デモ上限: 1日3件/ユーザー。画像は保存せず、候補入力後に手動修正できます。</p>
-          </div>
           <div class="field">
             <label for="nameInput">名前</label>
             <input id="nameInput" name="name" type="text" placeholder="商品名">
@@ -1122,7 +1075,7 @@
     </div>
     <div class="burst-layer" id="burstLayer" aria-hidden="true"></div>
     <div class="toast" id="toast"></div>
-    <script src="./app-config.js?v=20260312-camera01"></script>
+    <script src="./app-config.js?v=20260312-guest01"></script>
     <script>
       var defaultConfig = {
         gasEndpoint: 'https://script.google.com/macros/s/AKfycbyHvifPGHWhlETNRYE1nzrXJQvSP0TgbF1_J7Txt7qfsZSakE77lzPjNh09TTB_m9SP/exec',
@@ -1131,10 +1084,6 @@
         heroGifUrl: './assets/mascot.gif',
         guestMode: {
           enabled: true
-        },
-        cameraDemo: {
-          enabled: true,
-          dailyLimit: 3
         },
         firebase: {
           enabled: false,
@@ -1170,7 +1119,6 @@
       var runtimeFirebaseConfig = runtimeFirebase.config || {};
       var runtimeFirebaseAppCheck = runtimeFirebase.appCheck || {};
       var runtimeGuestMode = runtimeConfig.guestMode || {};
-      var runtimeCameraDemo = runtimeConfig.cameraDemo || {};
       var appConfig = {
         environment: envMode,
         gasEndpoint: runtimeConfig.gasEndpoint || defaultConfig.gasEndpoint,
@@ -1183,14 +1131,6 @@
           enabled: typeof runtimeGuestMode.enabled === 'boolean'
             ? runtimeGuestMode.enabled
             : defaultConfig.guestMode.enabled
-        },
-        cameraDemo: {
-          enabled: typeof runtimeCameraDemo.enabled === 'boolean'
-            ? runtimeCameraDemo.enabled
-            : defaultConfig.cameraDemo.enabled,
-          dailyLimit: Number.isFinite(Number(runtimeCameraDemo.dailyLimit))
-            ? Number(runtimeCameraDemo.dailyLimit)
-            : defaultConfig.cameraDemo.dailyLimit
         },
         firebase: {
           enabled: typeof runtimeFirebase.enabled === 'boolean'
@@ -1231,6 +1171,13 @@
         envBanner.textContent = 'MODEL APP: テスト環境です（本番データには反映されません）';
       }
     </script>
-    <script src="./app.js?v=20260312-camera01"></script>
+    <script src="./app.js?v=20260312-guest02"></script>
+    <script>
+      if (window.APP_CONFIG && window.APP_CONFIG.environment === 'model') {
+        var modelCameraScript = document.createElement('script');
+        modelCameraScript.src = './camera-demo-model.js?v=20260312-camera02';
+        document.body.appendChild(modelCameraScript);
+      }
+    </script>
   </body>
 </html>
