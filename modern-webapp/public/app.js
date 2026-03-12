@@ -382,7 +382,7 @@ function consumeGuestToCloudAutoLogin_() {
   }
 }
 
-function toggleGuestMode_() {
+async function toggleGuestMode_() {
   if (!GUEST_MODE_ENABLED) {
     throw new Error('この環境ではゲスト利用は無効です。');
   }
@@ -400,8 +400,16 @@ function toggleGuestMode_() {
     + '\n\nこのままゲスト利用を開始しますか？'
   );
   if (!confirmed) return;
+  if (signedInUser && firebaseAuth) {
+    await signOut_();
+  }
+  signedInUser = null;
+  signedInIdToken = '';
+  clearAuthRedirectPending_();
   setGuestModePreference_(true);
-  window.location.reload();
+  const url = new URL(window.location.href);
+  url.searchParams.set('mode', 'guest');
+  window.location.assign(url.toString());
 }
 
 function getFirebaseScopedUserId_() {
@@ -1027,7 +1035,9 @@ function activateFirebaseAppCheck_(app, options) {
 function bindEvents() {
   if (authGuestButton) {
     authGuestButton.addEventListener('click', function() {
-      toggleGuestMode_();
+      void runApi(async function() {
+        await toggleGuestMode_();
+      });
     });
   }
   if (authLoginButton) {
