@@ -2440,21 +2440,16 @@ async function initializeTransportLedger_() {
     return;
   }
   try {
-    const localEntries = transportLedger
-      .map(normalizeTransportLedgerEntry_)
-      .filter(Boolean);
     const snapshot = await firebaseTransportLedgerCollection.get();
     const remoteEntries = snapshot.docs
       .map(function(doc) {
         return normalizeTransportLedgerEntry_(Object.assign({}, doc.data() || {}, { id: doc.id }));
       })
       .filter(Boolean);
-    const mergedEntries = mergeTransportLedgers_(remoteEntries, localEntries);
-    transportLedger = mergedEntries;
+    // In logged-in cloud mode, Firebase is the single source of truth.
+    // Do not merge local cache (including legacy guest leftovers) into cloud ledger.
+    transportLedger = remoteEntries;
     saveTransportLedger_();
-    if (mergedEntries.length !== remoteEntries.length) {
-      await replaceFirebaseTransportLedger_();
-    }
   } catch (error) {
     console.warn('transport ledger init fallback to local cache:', error);
   }
@@ -2520,27 +2515,6 @@ async function replaceFirebaseTransportLedger_() {
     return;
   }
   await batch.commit();
-}
-
-function mergeTransportLedgers_(remoteEntries, localEntries) {
-  const merged = new Map();
-  const order = []
-    .concat(Array.isArray(remoteEntries) ? remoteEntries : [])
-    .concat(Array.isArray(localEntries) ? localEntries : []);
-
-  order.forEach(function(entry) {
-    const normalized = normalizeTransportLedgerEntry_(entry);
-    if (!normalized) return;
-    const id = String(normalized.id || '').trim();
-    if (!id) return;
-    if (!merged.has(id)) {
-      merged.set(id, normalized);
-      return;
-    }
-    merged.set(id, normalized);
-  });
-
-  return Array.from(merged.values());
 }
 
 function normalizeTransportLedgerEntry_(entry) {
