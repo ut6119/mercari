@@ -4681,34 +4681,30 @@ function applyYearlyOverallValue_(currentSummary) {
     return;
   }
   const prefix = String(YEARLY_SUMMARY_YEAR) + '-';
-  const aggregate = monthlyState.months.reduce(function(acc, entry) {
+  const pastProfit = monthlyState.months.reduce(function(total, entry) {
     const month = String(entry && entry.month ? entry.month : '').trim();
-    if (!month.startsWith(prefix)) return acc;
+    if (!month.startsWith(prefix)) return total;
     const summary = entry && entry.summary ? entry.summary : {};
-    acc.net += Number(summary.overallNet || 0);
-    acc.revenue += sanitizeAmount_(summary.soldRevenue) + sanitizeAmount_(summary.unsoldRevenue);
-    acc.count += sanitizeAmount_(summary.soldCount) + sanitizeAmount_(summary.unsoldCount);
-    return acc;
-  }, { net: 0, revenue: 0, count: 0 });
+    return total + Number(summary.soldProfit || summary.overallNet || 0);
+  }, 0);
   const currentMonth = getCurrentMonthLabel_();
   const isTargetYearCurrentMonth = currentMonth.startsWith(prefix);
-  const hasCurrentMonthEntry = monthlyState.months.some(function(entry) {
-    return String(entry && entry.month ? entry.month : '').trim() === currentMonth;
-  });
-  if (isTargetYearCurrentMonth && !hasCurrentMonthEntry) {
-    const summary = (currentSummary && typeof currentSummary === 'object')
-      ? currentSummary
-      : (currentData && currentData.summary ? currentData.summary : {});
-    aggregate.net += Number(summary.overallNet || 0);
-    aggregate.revenue += sanitizeAmount_(summary.soldRevenue) + sanitizeAmount_(summary.unsoldRevenue);
-    aggregate.count += sanitizeAmount_(summary.soldCount) + sanitizeAmount_(summary.unsoldCount);
-  }
-  aggregate.net -= getTransportLedgerYearTotal_(YEARLY_SUMMARY_YEAR);
-  yearlyOverallValue.textContent = formatSignedYen(aggregate.net);
-  yearlyOverallValue.style.color = aggregate.net < 0 ? '#9f3f3f' : '#1f6a52';
+  const summary = (currentSummary && typeof currentSummary === 'object')
+    ? currentSummary
+    : (currentData && currentData.summary ? currentData.summary : {});
+  const currentMonthSoldProfit = isTargetYearCurrentMonth
+    ? Number(summary.soldProfit || 0)
+    : 0;
+  const yearlyProfit = pastProfit + currentMonthSoldProfit;
+  yearlyOverallValue.textContent = formatSignedYen(yearlyProfit);
+  yearlyOverallValue.style.color = yearlyProfit < 0 ? '#9f3f3f' : '#1f6a52';
   if (yearlyOverallNote) {
-    const margin = aggregate.revenue > 0 ? aggregate.net / aggregate.revenue : 0;
-    yearlyOverallNote.textContent = aggregate.count + '件 / 利益率 ' + formatPercent(margin);
+    yearlyOverallNote.textContent = '式: '
+      + formatSignedYen(pastProfit)
+      + '（過去の利益） + '
+      + formatSignedYen(currentMonthSoldProfit)
+      + '（今月の販売済み利益） = '
+      + formatSignedYen(yearlyProfit);
   }
 }
 
