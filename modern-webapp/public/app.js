@@ -4798,13 +4798,8 @@ function applySummary(summary, lastUpdated) {
     soldTransportValue.textContent = formatYen(soldTransport);
   }
   soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(soldMargin);
-  if (isModelEnv_()) {
-    unsoldCostValue.textContent = formatYen(summary.unsoldCost || 0);
-    unsoldCostNote.textContent = summary.unsoldCount + '件';
-  } else {
-    unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
-    unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
-  }
+  unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
+  unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
   var totalCost = (Number(summary.soldCost) || 0) + (Number(summary.unsoldCost) || 0);
   overallNetValue.textContent = formatYen(totalCost);
   overallNetValue.style.color = '';
@@ -5338,7 +5333,7 @@ function applyModelFeatures_() {
   if (!isModelEnv_()) return;
   document.body.classList.add('model-features');
   var label = document.getElementById('unsoldStatLabel');
-  if (label) label.textContent = '原価合計';
+  if (label) label.textContent = '未販利益';
 }
 
 function getDefaultShipping_() {
