@@ -44,7 +44,30 @@
         background: linear-gradient(90deg, #ffe37f, #ffd24d);
         border-bottom: 1px solid rgba(16, 34, 70, 0.25);
       }
+      .sticky-header {
+        position: sticky;
+        top: 0;
+        z-index: 150;
+        display: none;
+        align-items: center;
+        justify-content: flex-end;
+        padding: 10px 16px;
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border-bottom: 1px solid rgba(216, 223, 235, 0.6);
+      }
+      .sticky-header .button-primary {
+        padding: 9px 16px;
+        font-size: 13px;
+      }
+      .model-features .sticky-header { display: flex; }
+      .model-features .hero-add-button { display: none; }
+      .model-features .model-only-settings { display: inline-flex; }
+      .col-date, .date-cell { display: none; }
+      .model-features .col-date, .model-features .date-cell { display: table-cell; }
       .shell { width: min(1280px, calc(100vw - 24px)); margin: 24px auto 40px; }
+      .model-features .shell { margin: 0 auto 40px; padding-top: 18px; }
       .hero, .panel {
         background: rgba(255, 255, 255, 0.94);
         border: 1px solid rgba(216, 223, 235, 0.9);
@@ -268,7 +291,8 @@
         border: 1px solid #c8dafc;
       }
 
-      .table-wrap { overflow: hidden; border-radius: 16px; border: 1px solid var(--line); background: #fff; }
+      .table-wrap { overflow-x: auto; overflow-y: hidden; border-radius: 16px; border: 1px solid var(--line); background: #fff; -webkit-overflow-scrolling: touch; }
+      .compact-table .col-date { width: 80px; min-width: 80px; }
       table { width: 100%; border-collapse: collapse; min-width: 0; table-layout: fixed; }
       .compact-table .col-select { width: 1%; }
       .compact-table .col-name { width: 27%; }
@@ -364,6 +388,11 @@
       .field input { width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; background: #fff; }
       .field input[readonly] { background: #f2f5fb; color: #44526f; }
       .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .field-row-always { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      @media (max-width: 720px) {
+        .field-row-always { grid-template-columns: 1fr; }
+        .model-features .field-row-always { grid-template-columns: 1fr 1fr; }
+      }
       .quick-add-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
       .transport-ledger-form { margin-top: 12px; }
       .transport-ledger-form .field-row {
@@ -725,6 +754,9 @@
   </head>
   <body>
     <div id="envBanner" class="env-banner" hidden></div>
+    <header class="sticky-header" id="stickyHeader">
+      <button class="button button-primary" id="stickyAddButton" type="button">＋ 商品追加</button>
+    </header>
     <div class="shell">
       <section class="hero">
         <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
@@ -738,6 +770,7 @@
           <button class="button button-secondary auth-button" id="authLoginButton" type="button">Googleログイン</button>
           <button class="button button-secondary auth-button" id="authLogoutButton" type="button">ログアウト</button>
           <button class="button button-secondary auth-button" id="authGuestButton" type="button">ゲスト利用</button>
+          <button class="button button-secondary auth-button model-only-settings" id="openSettingsButton" type="button" style="display:none;">設定</button>
         </div>
         <div class="guest-mode-notice" id="guestModeNotice" hidden>
           ゲスト利用中: データはこの端末のブラウザ内に保存されます。ブラウザデータ削除・端末変更・ストレージ整理で消える可能性があります。
@@ -758,8 +791,8 @@
             </div>
             <div class="stat-note" id="soldProfitNote">0件 / 利益率 0.0%</div>
           </div>
-          <div class="stat">
-            <div class="stat-label">未販利益</div>
+          <div class="stat" id="unsoldStatCard">
+            <div class="stat-label" id="unsoldStatLabel">未販利益</div>
             <div class="stat-value" id="unsoldCostValue">¥0</div>
             <div class="stat-note" id="unsoldCostNote">0件 / 利益率 0.0%</div>
           </div>
@@ -772,7 +805,7 @@
           <div class="stat">
             <div class="stat-label">2026年合計収支</div>
             <div class="stat-value" id="yearlyOverallValue">¥0</div>
-            <div class="stat-note" id="yearlyOverallNote">0件 / 利益率 0.0%</div>
+            <div class="stat-note" id="yearlyOverallNote">式: 過去の利益 + 今月の販売済み利益</div>
           </div>
         </div>
       </section>
@@ -815,11 +848,12 @@
                     <col class="col-cost">
                     <col class="col-profit">
                     <col class="col-rate">
+                    <col class="col-date">
                   </colgroup>
                   <thead>
                     <tr>
                       <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
+                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th><th class="center">購入日</th>
                     </tr>
                   </thead>
                   <tbody id="soldTableBody"></tbody>
@@ -855,11 +889,12 @@
                     <col class="col-cost">
                     <col class="col-profit">
                     <col class="col-rate">
+                    <col class="col-date">
                   </colgroup>
                   <thead>
                     <tr>
                       <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
+                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th><th class="center">購入日</th>
                     </tr>
                   </thead>
                   <tbody id="unsoldTableBody"></tbody>
@@ -1055,7 +1090,7 @@
             <label for="nameInput">名前</label>
             <input id="nameInput" name="name" type="text" placeholder="商品名">
           </div>
-          <div class="field-row">
+          <div class="field-row-always">
             <div class="field" id="revenueField">
               <label for="revenueInput">売上</label>
               <input id="revenueInput" name="revenue" type="number" min="0" step="1" placeholder="0">
@@ -1071,6 +1106,22 @@
           </div>
           <button class="button button-primary" id="addButton" type="submit">追加する</button>
         </form>
+      </section>
+    </div>
+    <div class="modal-overlay" id="settingsModal" aria-hidden="true">
+      <section class="panel modal-card">
+        <div class="modal-head">
+          <h2>設定</h2>
+          <button class="button button-secondary modal-close" id="closeSettingsButton" type="button">閉じる</button>
+        </div>
+        <div class="form-grid" style="margin-top: 16px;">
+          <div class="field">
+            <label for="defaultShippingInput">送料デフォルト値（円）</label>
+            <input id="defaultShippingInput" type="number" min="0" step="1" placeholder="160">
+          </div>
+          <p class="quick-add-note">商品追加時や未販売在庫の送料初期値を変更します。</p>
+          <button class="button button-primary" id="saveSettingsButton" type="button">保存する</button>
+        </div>
       </section>
     </div>
     <div class="burst-layer" id="burstLayer" aria-hidden="true"></div>
@@ -1175,7 +1226,7 @@
     <script>
       if (window.APP_CONFIG && window.APP_CONFIG.environment === 'model') {
         var modelCameraScript = document.createElement('script');
-        modelCameraScript.src = './camera-demo-model.js?v=20260312-camera02';
+        modelCameraScript.src = './camera-demo-model.js?v=20260312-photo01';
         document.body.appendChild(modelCameraScript);
       }
     </script>

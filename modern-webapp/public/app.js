@@ -35,6 +35,7 @@ const FIREBASE_FIRESTORE_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREB
 const FIREBASE_AUTH_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-auth-compat.js';
 const FIREBASE_APPCHECK_SDK_URL = 'https://www.gstatic.com/firebasejs/' + FIREBASE_SDK_VERSION + '/firebase-app-check-compat.js';
 const DEFAULT_SHIPPING = 160;
+const SHIPPING_DEFAULT_KEY = 'mercari_shipping_default_v1';
 const APP_TIMEZONE = 'Asia/Tokyo';
 const DASHBOARD_CACHE_KEY = 'mercari_dashboard_cache_v1';
 const TRANSPORT_LEDGER_KEY = 'mercari_transport_ledger_v1';
@@ -169,6 +170,12 @@ const authStatus = document.getElementById('authStatus');
 const authLoginButton = document.getElementById('authLoginButton');
 const authLogoutButton = document.getElementById('authLogoutButton');
 const authGuestButton = document.getElementById('authGuestButton');
+const stickyAddButton = document.getElementById('stickyAddButton');
+const openSettingsButton = document.getElementById('openSettingsButton');
+const settingsModal = document.getElementById('settingsModal');
+const closeSettingsButton = document.getElementById('closeSettingsButton');
+const defaultShippingInput = document.getElementById('defaultShippingInput');
+const saveSettingsButton = document.getElementById('saveSettingsButton');
 const guestModeNotice = document.getElementById('guestModeNotice');
 const selectionMode = {
   sold: false,
@@ -231,6 +238,7 @@ async function init() {
   }
   await initializeTransportPresetConfig_();
   bindEvents();
+  applyModelFeatures_();
   setArchiveCancelState_(false);
   startAddButtonPeek_();
   setDefaultTransportDate_();
@@ -1071,6 +1079,11 @@ function bindEvents() {
       openQuickAddModal_();
     });
   }
+  if (stickyAddButton) {
+    stickyAddButton.addEventListener('click', function() {
+      openQuickAddModal_();
+    });
+  }
   if (closeQuickAddButton) {
     closeQuickAddButton.addEventListener('click', function() {
       closeQuickAddModal_();
@@ -1118,8 +1131,53 @@ function bindEvents() {
       fillTransportPresetModalForm_(createDefaultTransportPresetConfig_());
     });
   }
+  if (openSettingsButton) {
+    openSettingsButton.addEventListener('click', function() {
+      if (settingsModal) {
+        if (defaultShippingInput) defaultShippingInput.value = String(getDefaultShipping_());
+        settingsModal.classList.add('open');
+        settingsModal.setAttribute('aria-hidden', 'false');
+      }
+    });
+  }
+  if (closeSettingsButton) {
+    closeSettingsButton.addEventListener('click', function() {
+      if (settingsModal) {
+        settingsModal.classList.remove('open');
+        settingsModal.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+  if (settingsModal) {
+    settingsModal.addEventListener('click', function(event) {
+      if (event.target === settingsModal) {
+        settingsModal.classList.remove('open');
+        settingsModal.setAttribute('aria-hidden', 'true');
+      }
+    });
+  }
+  if (saveSettingsButton) {
+    saveSettingsButton.addEventListener('click', function() {
+      var val = defaultShippingInput ? Number(defaultShippingInput.value) : DEFAULT_SHIPPING;
+      if (!Number.isFinite(val) || val < 0) val = DEFAULT_SHIPPING;
+      setDefaultShipping_(val);
+      if (shippingInput && !quickAddModal.classList.contains('open')) {
+        shippingInput.value = String(val);
+      }
+      if (settingsModal) {
+        settingsModal.classList.remove('open');
+        settingsModal.setAttribute('aria-hidden', 'true');
+      }
+      showToast('送料デフォルトを ¥' + val + ' に設定しました。');
+    });
+  }
   document.addEventListener('keydown', function(event) {
     if (event.key !== 'Escape') return;
+    if (settingsModal && settingsModal.classList.contains('open')) {
+      settingsModal.classList.remove('open');
+      settingsModal.setAttribute('aria-hidden', 'true');
+      return;
+    }
     if (transportPresetModal && transportPresetModal.classList.contains('open')) {
       closeTransportPresetModal_();
       return;
@@ -1161,7 +1219,7 @@ function bindEvents() {
         tab.classList.toggle('active', tab === button);
       });
       if (!shippingInput.value) {
-        shippingInput.value = '160';
+        shippingInput.value = String(getDefaultShipping_());
       }
     });
   });
@@ -1251,7 +1309,7 @@ function bindEvents() {
       }
       setArchiveCancelState_(false);
       quickAddForm.reset();
-      shippingInput.value = '160';
+      shippingInput.value = String(getDefaultShipping_());
       document.querySelector('[data-status-tab="unsold"]').click();
       applyDraftDestination_('home');
       setDefaultMonthlyTarget_();
@@ -2377,6 +2435,7 @@ function openQuickAddModal_() {
   if (!quickAddModal) return;
   activateView_('home');
   setDefaultMonthlyTarget_();
+  if (shippingInput) shippingInput.value = String(getDefaultShipping_());
   quickAddModal.classList.add('open');
   quickAddModal.setAttribute('aria-hidden', 'false');
   if (quickAddForm && quickAddForm.name) {
@@ -4143,7 +4202,7 @@ function togglePending(isPending) {
   const transportButtons = Array.from(document.querySelectorAll('[data-transport-action]'));
   const monthlyButtons = Array.from(document.querySelectorAll('[data-monthly-action]'));
   const monthButtons = Array.from(document.querySelectorAll('[data-month]'));
-  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton]
+  [soldUndoButton, soldRedoButton, unsoldUndoButton, unsoldRedoButton, archiveButton, addButton, transportAddButton, openQuickAddButton, stickyAddButton, closeQuickAddButton, openTransportPresetModalButton, closeTransportPresetModalButton, saveTransportPresetButton, resetTransportPresetButton]
     .concat(viewTabs, bulkButtons, transportButtons, monthlyButtons, monthButtons)
     .forEach(function(button) {
     if (!button) return;
@@ -4183,11 +4242,11 @@ function render(data, options) {
 
   soldTableBody.innerHTML = soldItems.length
     ? soldItems.map(renderSoldRow).join('')
-    : '<tr class="table-empty"><td colspan="7">販売済み商品はまだありません。</td></tr>';
+    : '<tr class="table-empty"><td colspan="8">販売済み商品はまだありません。</td></tr>';
 
   unsoldTableBody.innerHTML = unsoldItems.length
     ? unsoldItems.map(renderUnsoldRow).join('')
-    : '<tr class="table-empty"><td colspan="7">未販売在庫はまだありません。</td></tr>';
+    : '<tr class="table-empty"><td colspan="8">未販売在庫はまだありません。</td></tr>';
 
   setSelectionMode('sold', selectionMode.sold);
   setSelectionMode('unsold', selectionMode.unsold);
@@ -4616,6 +4675,7 @@ function renderSoldRow(item) {
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
+      <td class="center date-cell">${formatDateShort_(item.createdAtMs)}</td>
     </tr>
   `;
 }
@@ -4628,15 +4688,17 @@ function renderUnsoldRow(item) {
   const rateClass = hasMargin
     ? (item.margin < 0 ? 'bad' : (item.margin >= 0.2 ? 'good' : 'neutral'))
     : 'neutral';
+  const shippingDefault = getDefaultShipping_();
   return `
     <tr class="${rowClass}" data-id="${escapeHtml(item.id)}" data-transport="${escapeHtml(String(item.transport || 0))}">
       <td class="selection-cell"><input data-select-row type="checkbox" aria-label="選択"></td>
       <td><input data-field="name" value="${escapeHtml(item.name)}"></td>
       <td><input data-field="revenue" type="number" min="0" step="1" placeholder="0" value="${escapeHtml(String(item.revenue || ''))}"></td>
-      <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String((item.shipping === '' || item.shipping === null || typeof item.shipping === 'undefined') ? 160 : item.shipping))}"></td>
+      <td><input data-field="shipping" type="number" min="0" step="1" value="${escapeHtml(String((item.shipping === '' || item.shipping === null || typeof item.shipping === 'undefined') ? shippingDefault : item.shipping))}"></td>
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
+      <td class="center date-cell">${formatDateShort_(item.createdAtMs)}</td>
     </tr>
   `;
 }
@@ -4658,8 +4720,13 @@ function applySummary(summary, lastUpdated) {
     soldTransportValue.textContent = formatYen(soldTransport);
   }
   soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(soldMargin);
-  unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
-  unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
+  if (isModelEnv_()) {
+    unsoldCostValue.textContent = formatYen(summary.unsoldCost || 0);
+    unsoldCostNote.textContent = summary.unsoldCount + '件';
+  } else {
+    unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
+    unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
+  }
   overallNetValue.textContent = formatSignedYen(overallNet);
   overallNetValue.style.color = overallNet < 0 ? '#9f3f3f' : '#1f6a52';
   if (overallNetNote) {
@@ -4723,7 +4790,7 @@ function recalcSummaryFromDom() {
 
   soldRows.forEach(function(row) {
     const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
-    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
+    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, getDefaultShipping_());
     const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
     const transport = sanitizeAmount_(row.dataset.transport);
     const fee = Math.floor(revenue * 0.1);
@@ -4738,7 +4805,7 @@ function recalcSummaryFromDom() {
 
   unsoldRows.forEach(function(row) {
     const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
-    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
+    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, getDefaultShipping_());
     const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
     const hasRevenue = revenue > 0;
     const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
@@ -4775,7 +4842,7 @@ function updateRowPreview(row, status) {
 
   if (status === 'sold') {
     const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
-    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
+    const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, getDefaultShipping_());
     const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
     const fee = Math.floor(revenue * 0.1);
     const profit = revenue - fee - shipping - cost;
@@ -4797,7 +4864,7 @@ function updateRowPreview(row, status) {
 
   const cost = sanitizeAmount_(row.querySelector('[data-field="cost"]').value);
   const revenue = sanitizeAmount_(row.querySelector('[data-field="revenue"]').value);
-  const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, 160);
+  const shipping = sanitizeAmount_(row.querySelector('[data-field="shipping"]').value, getDefaultShipping_());
   const hasRevenue = revenue > 0;
   const fee = hasRevenue ? Math.floor(revenue * 0.1) : 0;
   const profit = hasRevenue ? (revenue - fee - shipping - cost) : -cost;
@@ -5182,6 +5249,40 @@ function formatSignedYen(value) {
 function formatPercent(value) {
   if (value === null || typeof value === 'undefined') return '--';
   return (Number(value) * 100).toFixed(1) + '%';
+}
+
+function isModelEnv_() {
+  return Boolean(window.APP_CONFIG && window.APP_CONFIG.environment === 'model');
+}
+
+function applyModelFeatures_() {
+  if (!isModelEnv_()) return;
+  document.body.classList.add('model-features');
+  var label = document.getElementById('unsoldStatLabel');
+  if (label) label.textContent = '原価合計';
+}
+
+function getDefaultShipping_() {
+  try {
+    const saved = localStorage.getItem(SHIPPING_DEFAULT_KEY);
+    if (saved !== null) {
+      const n = Number(saved);
+      if (Number.isFinite(n) && n >= 0) return n;
+    }
+  } catch (_e) {}
+  return DEFAULT_SHIPPING;
+}
+
+function setDefaultShipping_(value) {
+  try {
+    localStorage.setItem(SHIPPING_DEFAULT_KEY, String(Number(value) || 0));
+  } catch (_e) {}
+}
+
+function formatDateShort_(ms) {
+  if (!ms || !Number.isFinite(Number(ms)) || Number(ms) <= 0) return '--';
+  const d = new Date(Number(ms));
+  return (d.getMonth() + 1) + '/' + d.getDate();
 }
 
 function formatSignedPercent_(value) {
