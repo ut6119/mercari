@@ -6,7 +6,6 @@ import { google } from 'googleapis';
 
 const app = express();
 app.use(express.json());
-app.use(express.static('public'));
 
 const PORT = Number(process.env.PORT || 3000);
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID || '12z7V7um65_0Ut0Ix-Mdw-hI_InFKFBZdUR5C5xZAIAM';
@@ -19,6 +18,19 @@ const META_ID_COLUMN = 9;
 const META_STATUS_COLUMN = 10;
 const DEFAULT_SHIPPING = 160;
 const APP_TIMEZONE = process.env.APP_TIMEZONE || 'Asia/Tokyo';
+const PUBLIC_GAS_ENDPOINT = process.env.PUBLIC_GAS_ENDPOINT || GAS_WEBAPP_URL;
+const PUBLIC_REQUIRE_LOGIN = parseBooleanEnv_(process.env.PUBLIC_REQUIRE_LOGIN, true);
+const PUBLIC_HERO_GIF_URL = process.env.PUBLIC_HERO_GIF_URL || './assets/mascot.gif';
+const PUBLIC_FIREBASE_ENABLED = parseBooleanEnv_(process.env.PUBLIC_FIREBASE_ENABLED, false);
+const PUBLIC_FIREBASE_COLLECTION = process.env.PUBLIC_FIREBASE_COLLECTION || 'mercari_items';
+const PUBLIC_FIREBASE_ARCHIVE_COLLECTION = process.env.PUBLIC_FIREBASE_ARCHIVE_COLLECTION || 'mercari_archives';
+const PUBLIC_FIREBASE_API_KEY = process.env.PUBLIC_FIREBASE_API_KEY || '';
+const PUBLIC_FIREBASE_AUTH_DOMAIN = process.env.PUBLIC_FIREBASE_AUTH_DOMAIN || '';
+const PUBLIC_FIREBASE_PROJECT_ID = process.env.PUBLIC_FIREBASE_PROJECT_ID || '';
+const PUBLIC_FIREBASE_APP_ID = process.env.PUBLIC_FIREBASE_APP_ID || '';
+const PUBLIC_FIREBASE_APPCHECK_ENABLED = parseBooleanEnv_(process.env.PUBLIC_FIREBASE_APPCHECK_ENABLED, false);
+const PUBLIC_FIREBASE_APPCHECK_SITE_KEY = process.env.PUBLIC_FIREBASE_APPCHECK_SITE_KEY || '';
+const PUBLIC_FIREBASE_APPCHECK_DEBUG_TOKEN = process.env.PUBLIC_FIREBASE_APPCHECK_DEBUG_TOKEN || '';
 
 const BACKEND_MODE = detectBackendMode_();
 let sheets = null;
@@ -73,9 +85,55 @@ app.post('/api/archive', async (_req, res) => {
   }
 });
 
+app.post('/api/archive/cancel', async (_req, res) => {
+  try {
+    const data = await cancelMonthlyArchive_();
+    res.json(data);
+  } catch (error) {
+    handleError(res, error);
+  }
+});
+
+app.get('/app-config.js', (_req, res) => {
+  const payload = {
+    gasEndpoint: PUBLIC_GAS_ENDPOINT,
+    requireLogin: PUBLIC_REQUIRE_LOGIN,
+    heroGifUrl: PUBLIC_HERO_GIF_URL,
+    firebase: {
+      enabled: PUBLIC_FIREBASE_ENABLED,
+      collection: PUBLIC_FIREBASE_COLLECTION,
+      archiveCollection: PUBLIC_FIREBASE_ARCHIVE_COLLECTION,
+      config: {
+        apiKey: PUBLIC_FIREBASE_API_KEY,
+        authDomain: PUBLIC_FIREBASE_AUTH_DOMAIN,
+        projectId: PUBLIC_FIREBASE_PROJECT_ID,
+        appId: PUBLIC_FIREBASE_APP_ID
+      },
+      appCheck: {
+        enabled: PUBLIC_FIREBASE_APPCHECK_ENABLED,
+        siteKey: PUBLIC_FIREBASE_APPCHECK_SITE_KEY,
+        debugToken: PUBLIC_FIREBASE_APPCHECK_DEBUG_TOKEN
+      }
+    }
+  };
+  res.set('Cache-Control', 'no-store');
+  res.type('application/javascript; charset=utf-8');
+  res.send(`window.APP_RUNTIME_CONFIG = ${JSON.stringify(payload)};`);
+});
+
+app.use(express.static('public'));
+
 app.listen(PORT, () => {
   console.log(`Mercari web app: http://localhost:${PORT} (${BACKEND_MODE} backend)`);
 });
+
+function parseBooleanEnv_(value, fallback) {
+  if (value == null || value === '') return fallback;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  return fallback;
+}
 
 function detectBackendMode_() {
   if (hasSheetsCredentials_()) {
@@ -192,6 +250,28 @@ async function archiveMonthlyData_() {
   return getDashboardData();
 }
 
+async function cancelMonthlyArchive_() {
+  if (BACKEND_MODE === 'script') {
+    return scriptAction_('archiveCancel');
+  }
+  if (BACKEND_MODE === 'gas') {
+    return gasAction_('archive-cancel');
+  }
+
+  const archiveName = getLastMonthLabel();
+  const archiveSheet = await getSheetByName_(archiveName);
+  if (!archiveSheet || !archiveSheet.properties || typeof archiveSheet.properties.sheetId !== 'number') {
+    throw createBadRequest('取り消せる月別アーカイブがありません。');
+  }
+
+  const archivedItems = await readItems(archiveName);
+  const mainItems = await readItems(SHEET_NAME);
+  const mergedItems = mergeItemsById_(archivedItems.concat(mainItems));
+  await writeSheetFromItems(mergedItems, SHEET_NAME);
+  await deleteSheetById_(archiveSheet.properties.sheetId);
+  return getDashboardData();
+}
+
 async function scriptAction_(action, payload) {
   let functionName = '';
   let parameters = [];
@@ -207,6 +287,9 @@ async function scriptAction_(action, payload) {
     parameters = [String(payload?.itemId || '')];
   } else if (action === 'archive') {
     functionName = 'archiveMonthlyData';
+    parameters = [];
+  } else if (action === 'archiveCancel') {
+    functionName = 'cancelMonthlyArchive';
     parameters = [];
   } else {
     throw createBadRequest(`Unknown action: ${action}`);
@@ -272,11 +355,11 @@ async function getDashboardData() {
   };
 }
 
-async function readItems() {
-  await ensureSheetExists(SHEET_NAME);
+async function readItems(sheetName = SHEET_NAME) {
+  await ensureSheetExists(sheetName);
   const response = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_NAME}!A${DATA_START_ROW}:J`
+    range: `${sheetName}!A${DATA_START_ROW}:J`
   });
   const rows = response.data.values || [];
   const items = [];
@@ -437,6 +520,46 @@ async function ensureSheetExists(sheetName) {
 async function getSheetNames() {
   const spreadsheet = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
   return (spreadsheet.data.sheets || []).map((sheet) => sheet.properties?.title).filter(Boolean);
+}
+
+async function getSheetByName_(sheetName) {
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+    fields: 'sheets(properties(sheetId,title))'
+  });
+  return (spreadsheet.data.sheets || []).find((sheet) => sheet.properties?.title === sheetName) || null;
+}
+
+async function deleteSheetById_(sheetId) {
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteSheet: { sheetId }
+        }
+      ]
+    }
+  });
+}
+
+function mergeItemsById_(items) {
+  const merged = new Map();
+  for (const source of items) {
+    const name = String(source?.name || '').trim();
+    if (!name) continue;
+    const id = String(source?.id || '').trim() || crypto.randomUUID();
+    const status = normalizeStatus(source?.status) || (parseNumber(source?.revenue) > 0 ? 'sold' : 'unsold');
+    merged.set(id, {
+      id,
+      status: status === 'sold' ? 'sold' : 'unsold',
+      name,
+      revenue: parseNumber(source?.revenue),
+      shipping: parseOptionalNumber(source?.shipping),
+      cost: parseNumber(source?.cost)
+    });
+  }
+  return Array.from(merged.values());
 }
 
 function sanitizePayload(payload) {

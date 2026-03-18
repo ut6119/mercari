@@ -153,9 +153,7 @@ function archiveMonthlyData() {
   const ss = openSpreadsheet_();
   const mainSheet = ensureSheet_();
   const items = readItems_();
-  const now = new Date();
-  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const archiveName = Utilities.formatDate(lastMonth, APP_TIMEZONE, 'yyyy-MM');
+  const archiveName = getLastMonthLabel_();
 
   if (ss.getSheetByName(archiveName)) {
     throw new Error('「' + archiveName + '」は既に存在します。');
@@ -175,6 +173,25 @@ function archiveMonthlyData() {
   writeSheetFromItems_(unsoldOnly, mainSheet);
 
   return buildDashboardFromItems_(unsoldOnly);
+}
+
+function cancelMonthlyArchive() {
+  const ss = openSpreadsheet_();
+  const mainSheet = ensureSheet_();
+  const archiveName = getLastMonthLabel_();
+  const archiveSheet = ss.getSheetByName(archiveName);
+
+  if (!archiveSheet) {
+    throw new Error('取り消せる月別アーカイブがありません。');
+  }
+
+  const mainItems = readItemsFromSheet_(mainSheet);
+  const archivedItems = readItemsFromSheet_(archiveSheet);
+  const mergedItems = mergeItemsById_(archivedItems.concat(mainItems));
+
+  writeSheetFromItems_(mergedItems, mainSheet);
+  ss.deleteSheet(archiveSheet);
+  return buildDashboardFromItems_(mergedItems);
 }
 
 function getDashboardData_() {
@@ -310,6 +327,33 @@ function readItemsFromSheet_(sheet) {
   return items.filter(function(item) {
     return Boolean(item.name);
   });
+}
+
+function getLastMonthLabel_() {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return Utilities.formatDate(lastMonth, APP_TIMEZONE, 'yyyy-MM');
+}
+
+function mergeItemsById_(items) {
+  const merged = new Map();
+  (Array.isArray(items) ? items : []).forEach(function(source) {
+    const name = String(source && source.name ? source.name : '').trim();
+    if (!name) {
+      return;
+    }
+    const id = String(source && source.id ? source.id : '').trim() || Utilities.getUuid();
+    const status = normalizeStatus_(source && source.status) || (parseNumber_(source && source.revenue) > 0 ? 'sold' : 'unsold');
+    merged.set(id, {
+      id: id,
+      status: status === 'sold' ? 'sold' : 'unsold',
+      name: name,
+      revenue: parseNumber_(source && source.revenue),
+      shipping: parseOptionalNumber_(source && source.shipping),
+      cost: parseNumber_(source && source.cost)
+    });
+  });
+  return Array.from(merged.values());
 }
 
 function getMonthlySheetsData_() {
@@ -867,6 +911,10 @@ function parseApiGetPayload_(e) {
     return { action: 'archive' };
   }
 
+  if (action === 'archive-cancel' || action === 'archivecancel') {
+    return { action: 'archive-cancel' };
+  }
+
   if (action === 'bulk') {
     const op = String(p.op || p.bulkAction || '').trim().toLowerCase();
     const itemIds = normalizeIdList_(p.itemIds || p.ids || '');
@@ -955,6 +1003,10 @@ function runApiAction_(payload) {
 
   if (action === 'archive') {
     return archiveMonthlyData();
+  }
+
+  if (action === 'archive-cancel' || action === 'archivecancel') {
+    return cancelMonthlyArchive();
   }
 
   if (action === 'bulk') {
