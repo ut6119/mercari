@@ -4805,10 +4805,11 @@ function applySummary(summary, lastUpdated) {
     unsoldCostValue.textContent = formatYen(summary.unsoldProfit);
     unsoldCostNote.textContent = summary.unsoldCount + '件 / 利益率 ' + formatPercent(summary.unsoldMargin);
   }
-  overallNetValue.textContent = formatSignedYen(overallNet);
-  overallNetValue.style.color = overallNet < 0 ? '#9f3f3f' : '#1f6a52';
+  var totalCost = (Number(summary.soldCost) || 0) + (Number(summary.unsoldCost) || 0);
+  overallNetValue.textContent = formatYen(totalCost);
+  overallNetValue.style.color = '';
   if (overallNetNote) {
-    overallNetNote.textContent = '合計利益率 ' + formatPercent(overallMargin);
+    overallNetNote.textContent = '販売済み ¥' + (Number(summary.soldCost) || 0).toLocaleString() + ' + 未販売 ¥' + (Number(summary.unsoldCost) || 0).toLocaleString();
   }
   soldCountLabel.textContent = summary.soldCount + '件';
   unsoldCountLabel.textContent = summary.unsoldCount + '件';

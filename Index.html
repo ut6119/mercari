@@ -476,9 +476,9 @@
             <div class="stat-note" id="unsoldCostNote">0件 / 現在の投資額</div>
           </div>
           <div class="stat stat-overall">
-            <div class="stat-label">販売前後の合計収支</div>
+            <div class="stat-label">原価合計</div>
             <div class="stat-value" id="overallNetValue">¥0</div>
-            <div class="stat-note">販売済み利益 - 未販売在庫原価</div>
+            <div class="stat-note" id="overallNetNote">販売済み + 未販売</div>
           </div>
           <div class="stat">
             <div class="stat-label">売上合計</div>
@@ -790,8 +790,11 @@
         soldProfitNote.textContent = summary.soldCount + '件 / 利益率 ' + formatPercent(summary.soldMargin);
         unsoldCostValue.textContent = formatYen(summary.unsoldCost);
         unsoldCostNote.textContent = summary.unsoldCount + '件 / 現在の投資額';
-        overallNetValue.textContent = formatSignedYen(summary.overallNet);
-        overallNetValue.style.color = summary.overallNet < 0 ? '#9f3f3f' : '#1f6a52';
+        var totalCost = (Number(summary.soldCost) || 0) + (Number(summary.unsoldCost) || 0);
+        overallNetValue.textContent = formatYen(totalCost);
+        overallNetValue.style.color = '';
+        var overallNetNote = document.getElementById('overallNetNote');
+        if (overallNetNote) { overallNetNote.textContent = '販売済み ¥' + (Number(summary.soldCost) || 0).toLocaleString() + ' + 未販売 ¥' + (Number(summary.unsoldCost) || 0).toLocaleString(); }
         soldRevenueValue.textContent = formatYen(summary.soldRevenue);
         lastUpdatedValue.textContent = '最終更新 ' + data.lastUpdated;
         soldCountLabel.textContent = summary.soldCount + '件';
