@@ -975,7 +975,7 @@ function updateAuthUi_(statusText) {
     authLogoutButton.style.display = !guestModeActive && signedIn ? 'inline-flex' : 'none';
   }
   if (authGuestButton) {
-    authGuestButton.style.display = GUEST_MODE_ENABLED ? 'inline-flex' : 'none';
+    authGuestButton.style.display = 'none';
     authGuestButton.textContent = guestModeActive ? 'クラウド利用へ' : 'ゲスト利用';
   }
 }
