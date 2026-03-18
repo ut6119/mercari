@@ -1083,6 +1083,74 @@ function bindEvents() {
     stickyAddButton.addEventListener('click', function() {
       openQuickAddModal_();
     });
+    (function initDraggableFab() {
+      var LONG_PRESS_MS = 400;
+      var STORAGE_KEY = 'fab_position';
+      var holdTimer = null;
+      var dragging = false;
+      var offsetX = 0;
+      var offsetY = 0;
+      var moved = false;
+      var saved = null;
+      try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch(_){}
+      if (saved && typeof saved.top === 'number' && typeof saved.left === 'number') {
+        stickyAddButton.style.top = Math.max(0, Math.min(saved.top, window.innerHeight - 48)) + 'px';
+        stickyAddButton.style.left = Math.max(0, Math.min(saved.left, window.innerWidth - 48)) + 'px';
+        stickyAddButton.style.right = 'auto';
+      }
+      function getPos(e) {
+        var t = e.touches ? e.touches[0] : e;
+        return { x: t.clientX, y: t.clientY };
+      }
+      function startHold(e) {
+        if (dragging) return;
+        var pos = getPos(e);
+        moved = false;
+        holdTimer = setTimeout(function() {
+          dragging = true;
+          moved = false;
+          var rect = stickyAddButton.getBoundingClientRect();
+          offsetX = pos.x - rect.left;
+          offsetY = pos.y - rect.top;
+          stickyAddButton.style.opacity = '0.7';
+          stickyAddButton.style.transition = 'none';
+        }, LONG_PRESS_MS);
+      }
+      function moveBtn(e) {
+        if (!dragging) {
+          if (holdTimer) { var p = getPos(e); if (Math.abs(p.x) > 5 || Math.abs(p.y) > 5) { clearTimeout(holdTimer); holdTimer = null; } }
+          return;
+        }
+        e.preventDefault();
+        moved = true;
+        var pos = getPos(e);
+        var x = Math.max(0, Math.min(pos.x - offsetX, window.innerWidth - stickyAddButton.offsetWidth));
+        var y = Math.max(0, Math.min(pos.y - offsetY, window.innerHeight - stickyAddButton.offsetHeight));
+        stickyAddButton.style.left = x + 'px';
+        stickyAddButton.style.top = y + 'px';
+        stickyAddButton.style.right = 'auto';
+      }
+      function endDrag() {
+        clearTimeout(holdTimer);
+        holdTimer = null;
+        if (dragging) {
+          dragging = false;
+          stickyAddButton.style.opacity = '';
+          stickyAddButton.style.transition = '';
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ top: parseInt(stickyAddButton.style.top), left: parseInt(stickyAddButton.style.left) })); } catch(_){}
+          if (moved) {
+            stickyAddButton.addEventListener('click', function suppress(ev) { ev.stopImmediatePropagation(); ev.preventDefault(); stickyAddButton.removeEventListener('click', suppress, true); }, true);
+          }
+        }
+      }
+      stickyAddButton.addEventListener('touchstart', startHold, { passive: true });
+      stickyAddButton.addEventListener('touchmove', moveBtn, { passive: false });
+      stickyAddButton.addEventListener('touchend', endDrag);
+      stickyAddButton.addEventListener('touchcancel', endDrag);
+      stickyAddButton.addEventListener('mousedown', startHold);
+      window.addEventListener('mousemove', moveBtn);
+      window.addEventListener('mouseup', endDrag);
+    })();
   }
   if (closeQuickAddButton) {
     closeQuickAddButton.addEventListener('click', function() {
