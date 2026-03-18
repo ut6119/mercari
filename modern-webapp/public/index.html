@@ -58,15 +58,10 @@
         border-radius: 50px;
         box-shadow: 0 4px 16px rgba(0,0,0,0.18);
       }
-      .model-features #stickyAddButton { display: inline-flex; }
-      .model-features .hero-add-button { display: none; }
-      .model-features .model-only-settings { display: inline-flex; }
-      .date-cell { display: none; }
-      .col-date { visibility: collapse; width: 0; }
-      .model-features .date-cell { display: table-cell; }
-      .model-features .col-date { visibility: visible; width: 80px; }
-      .shell { width: min(1280px, calc(100vw - 24px)); margin: 24px auto 40px; }
-      .model-features .shell { margin: 0 auto 40px; padding-top: 18px; }
+      #stickyAddButton { display: inline-flex; }
+      .hero-add-button { display: none; }
+      .col-date { width: 80px; min-width: 80px; }
+      .shell { width: min(1280px, calc(100vw - 24px)); margin: 0 auto 40px; padding-top: 18px; }
       .hero, .panel {
         background: rgba(255, 255, 255, 0.94);
         border: 1px solid rgba(216, 223, 235, 0.9);
@@ -293,7 +288,7 @@
       .table-wrap { overflow-x: auto; overflow-y: hidden; border-radius: 16px; border: 1px solid var(--line); background: #fff; -webkit-overflow-scrolling: touch; }
       .compact-table .col-date { width: 80px; min-width: 80px; }
       table { width: 100%; border-collapse: collapse; min-width: 0; table-layout: fixed; }
-      .model-features table { min-width: calc(100% + 80px); }
+      table { min-width: calc(100% + 80px); }
       .compact-table .col-select { width: 1%; }
       .compact-table .col-name { width: 27%; }
       .compact-table .col-revenue,
@@ -392,7 +387,7 @@
       .field-row-always { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       @media (max-width: 720px) {
         .field-row-always { grid-template-columns: 1fr; }
-        .model-features .field-row-always { grid-template-columns: 1fr 1fr; }
+        .field-row-always { grid-template-columns: 1fr 1fr; }
       }
       .quick-add-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
       .transport-ledger-form { margin-top: 12px; }
