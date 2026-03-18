@@ -45,23 +45,20 @@
         border-bottom: 1px solid rgba(16, 34, 70, 0.25);
       }
       .sticky-header {
-        position: sticky;
-        top: 0;
-        z-index: 150;
         display: none;
-        align-items: center;
-        justify-content: flex-end;
-        padding: 10px 16px;
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border-bottom: 1px solid rgba(216, 223, 235, 0.6);
       }
-      .sticky-header .button-primary {
-        padding: 9px 16px;
-        font-size: 13px;
+      #stickyAddButton {
+        display: none;
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 150;
+        padding: 14px 20px;
+        font-size: 14px;
+        border-radius: 50px;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.18);
       }
-      .model-features .sticky-header { display: flex; }
+      .model-features #stickyAddButton { display: inline-flex; }
       .model-features .hero-add-button { display: none; }
       .model-features .model-only-settings { display: inline-flex; }
       .col-date, .date-cell { display: none; }
@@ -754,9 +751,8 @@
   </head>
   <body>
     <div id="envBanner" class="env-banner" hidden></div>
-    <header class="sticky-header" id="stickyHeader">
-      <button class="button button-primary" id="stickyAddButton" type="button">＋ 商品追加</button>
-    </header>
+    <header class="sticky-header" id="stickyHeader"></header>
+    <button class="button button-primary" id="stickyAddButton" type="button">＋ 商品追加</button>
     <div class="shell">
       <section class="hero">
         <img id="heroMascot" class="hero-mascot" src="" alt="mascot">
