@@ -1276,13 +1276,16 @@ function bindEvents() {
   quickAddForm.addEventListener('submit', async function(event) {
     event.preventDefault();
     const normalizedDestination = (draftDestination === 'monthly') ? 'monthly' : 'home';
+    var addDateVal = document.getElementById('addDateInput') ? document.getElementById('addDateInput').value : '';
+    var addDateMs = addDateVal ? new Date(addDateVal + 'T00:00:00').getTime() : Date.now();
     const payload = {
       status: normalizedDestination === 'monthly' ? 'sold' : draftStatus,
       name: quickAddForm.name.value.trim(),
       revenue: revenueInput.value,
       shipping: shippingInput.value,
       cost: quickAddForm.cost.value,
-      transport: '0'
+      transport: '0',
+      createdAtMs: addDateMs
     };
     const monthlyTarget = normalizeDraftTargetMonth_(monthlyTargetInput ? monthlyTargetInput.value : '');
     await runApi(async function() {
@@ -1310,6 +1313,8 @@ function bindEvents() {
       setArchiveCancelState_(false);
       quickAddForm.reset();
       shippingInput.value = String(getDefaultShipping_());
+      var resetDateInput = document.getElementById('addDateInput');
+      if (resetDateInput) { var rd = new Date(); resetDateInput.value = rd.getFullYear() + '-' + String(rd.getMonth()+1).padStart(2,'0') + '-' + String(rd.getDate()).padStart(2,'0'); }
       document.querySelector('[data-status-tab="unsold"]').click();
       applyDraftDestination_('home');
       setDefaultMonthlyTarget_();
@@ -2436,6 +2441,8 @@ function openQuickAddModal_() {
   activateView_('home');
   setDefaultMonthlyTarget_();
   if (shippingInput) shippingInput.value = String(getDefaultShipping_());
+  var addDateInput = document.getElementById('addDateInput');
+  if (addDateInput) { var d = new Date(); addDateInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
   quickAddModal.classList.add('open');
   quickAddModal.setAttribute('aria-hidden', 'false');
   if (quickAddForm && quickAddForm.name) {
@@ -3552,15 +3559,16 @@ async function firebaseSaveItem_(payload) {
     shipping: stored.shipping,
     cost: stored.cost,
     transport: stored.transport,
-    createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : now,
+    createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : (item.createdAtMs || now),
     updatedAtMs: now
   }, { merge: true });
 
+  var effectiveCreatedAt = existing && existing.createdAtMs ? existing.createdAtMs : (item.createdAtMs || now);
   if (existing) {
     Object.assign(existing, stored, { updatedAtMs: now });
   } else {
-    firebaseItemsCache.push(Object.assign({}, stored, { createdAtMs: now, updatedAtMs: now }));
-    void firebaseRecordMonthlyAddition_(now);
+    firebaseItemsCache.push(Object.assign({}, stored, { createdAtMs: effectiveCreatedAt, updatedAtMs: now }));
+    void firebaseRecordMonthlyAddition_(effectiveCreatedAt);
   }
 
   return buildDashboardDataFromItems_(firebaseItemsCache, now);
@@ -4007,7 +4015,7 @@ function sanitizePayloadForStore_(payload) {
     throw new Error('販売済みは売上を入力してください。');
   }
 
-  return {
+  var result = {
     id: String(source.id || ''),
     status: status,
     name: name,
@@ -4016,6 +4024,8 @@ function sanitizePayloadForStore_(payload) {
     cost: cost,
     transport: transport
   };
+  if (source.createdAtMs) result.createdAtMs = source.createdAtMs;
+  return result;
 }
 
 function enrichItem_(item) {

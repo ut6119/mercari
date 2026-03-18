@@ -1096,9 +1096,15 @@
               <input id="costInput" name="cost" type="number" min="0" step="1" placeholder="0">
             </div>
           </div>
-          <div class="field">
-            <label for="shippingInput">送料</label>
-            <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
+          <div class="field-row-always">
+            <div class="field">
+              <label for="shippingInput">送料</label>
+              <input id="shippingInput" name="shipping" type="number" min="0" step="1" value="160">
+            </div>
+            <div class="field">
+              <label for="addDateInput">購入日</label>
+              <input id="addDateInput" name="addDate" type="date">
+            </div>
           </div>
           <button class="button button-primary" id="addButton" type="submit">追加する</button>
         </form>
