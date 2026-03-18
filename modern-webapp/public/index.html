@@ -61,8 +61,10 @@
       .model-features #stickyAddButton { display: inline-flex; }
       .model-features .hero-add-button { display: none; }
       .model-features .model-only-settings { display: inline-flex; }
-      .col-date, .date-cell { display: none; }
-      .model-features .col-date, .model-features .date-cell { display: table-cell; }
+      .date-cell { display: none; }
+      .col-date { visibility: collapse; width: 0; }
+      .model-features .date-cell { display: table-cell; }
+      .model-features .col-date { visibility: visible; width: 80px; }
       .shell { width: min(1280px, calc(100vw - 24px)); margin: 24px auto 40px; }
       .model-features .shell { margin: 0 auto 40px; padding-top: 18px; }
       .hero, .panel {
