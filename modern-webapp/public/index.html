@@ -85,19 +85,20 @@
       }
       .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
       .refresh-button {
-        background: #f0f4fa;
+        background: #e8eefb;
         border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 4px 10px;
-        font-size: 11px;
-        line-height: 1.4;
-        color: var(--muted);
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 12px;
+        line-height: 1;
+        color: #23417f;
         cursor: pointer;
-        transition: color 0.2s, border-color 0.2s;
+        transition: color 0.2s, border-color 0.2s, transform 0.15s;
         display: inline-flex;
         align-items: center;
-        gap: 3px;
+        gap: 4px;
       }
+      .refresh-button:hover { transform: translateY(-1px); }
       .refresh-button:hover { color: var(--accent); border-color: var(--accent); }
       .refresh-button.spinning .refresh-icon { animation: spin 0.6s linear infinite; }
       .refresh-button.spinning { pointer-events: none; }
