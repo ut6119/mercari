@@ -1209,6 +1209,8 @@
         }
       };
       if (envMode === 'model') {
+        appConfig.requireLogin = true;
+        appConfig.guestMode.enabled = false;
         appConfig.firebase.collection = withSuffixIfNeeded(appConfig.firebase.collection, '_model');
         appConfig.firebase.archiveCollection = withSuffixIfNeeded(appConfig.firebase.archiveCollection, '_model');
         appConfig.firebase.usageCollection = withSuffixIfNeeded(appConfig.firebase.usageCollection, '_model');
