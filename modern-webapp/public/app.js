@@ -1077,14 +1077,13 @@ function bindEvents() {
 
   if (refreshDashboardButton) {
     refreshDashboardButton.addEventListener('click', function() {
+      if (refreshDashboardButton.classList.contains('spinning')) return;
       refreshDashboardButton.classList.add('spinning');
-      void runApi(async function() {
-        try {
-          await refreshDashboardInBackground_({ force: true });
-        } finally {
+      refreshDashboardInBackground_({ force: true })
+        .catch(function() {})
+        .then(function() {
           refreshDashboardButton.classList.remove('spinning');
-        }
-      });
+        });
     });
   }
   if (openQuickAddButton) {
