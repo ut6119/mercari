@@ -111,6 +111,7 @@ const unsoldToolbar = document.getElementById('unsoldToolbar');
 const quickAddForm = document.getElementById('quickAddForm');
 const quickAddModal = document.getElementById('quickAddModal');
 const openQuickAddButton = document.getElementById('openQuickAddButton');
+const refreshDashboardButton = document.getElementById('refreshDashboardButton');
 const closeQuickAddButton = document.getElementById('closeQuickAddButton');
 const statusSwitch = document.getElementById('statusSwitch');
 const destinationSwitch = document.getElementById('destinationSwitch');
@@ -1074,6 +1075,18 @@ function bindEvents() {
     });
   });
 
+  if (refreshDashboardButton) {
+    refreshDashboardButton.addEventListener('click', function() {
+      refreshDashboardButton.classList.add('spinning');
+      void runApi(async function() {
+        try {
+          await refreshDashboardInBackground_({ force: true });
+        } finally {
+          refreshDashboardButton.classList.remove('spinning');
+        }
+      });
+    });
+  }
   if (openQuickAddButton) {
     openQuickAddButton.addEventListener('click', function() {
       openQuickAddModal_();
@@ -2188,16 +2201,19 @@ async function reloadData(message) {
   });
 }
 
-async function refreshDashboardInBackground_() {
+async function refreshDashboardInBackground_(options) {
+  var force = options && options.force;
   try {
     const data = await request('/api/dashboard');
-    const active = document.activeElement;
-    const editingNow = Boolean(
-      active &&
-      (active.matches('[data-field]') || active.matches('#nameInput, #revenueInput, #costInput, #shippingInput, #transportInput, #monthlyTargetInput'))
-    );
-    if (editingNow || pending) {
-      return;
+    if (!force) {
+      const active = document.activeElement;
+      const editingNow = Boolean(
+        active &&
+        (active.matches('[data-field]') || active.matches('#nameInput, #revenueInput, #costInput, #shippingInput, #transportInput, #monthlyTargetInput'))
+      );
+      if (editingNow || pending) {
+        return;
+      }
     }
     render(data, { skipHistory: true });
   } catch (_error) {
