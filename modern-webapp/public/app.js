@@ -238,7 +238,7 @@ async function init() {
   }
   await initializeTransportPresetConfig_();
   bindEvents();
-  applyModelFeatures_();
+
   setArchiveCancelState_(false);
   startAddButtonPeek_();
   setDefaultTransportDate_();
@@ -5325,16 +5325,7 @@ function formatPercent(value) {
   return (Number(value) * 100).toFixed(1) + '%';
 }
 
-function isModelEnv_() {
-  return Boolean(window.APP_CONFIG && window.APP_CONFIG.environment === 'model');
-}
 
-function applyModelFeatures_() {
-  if (!isModelEnv_()) return;
-  document.body.classList.add('model-features');
-  var label = document.getElementById('unsoldStatLabel');
-  if (label) label.textContent = '未販利益';
-}
 
 function getDefaultShipping_() {
   try {
