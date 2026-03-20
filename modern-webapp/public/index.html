@@ -84,24 +84,19 @@
         filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.12));
       }
       .hero-top { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
-      .refresh-row {
-        display: flex;
-        justify-content: flex-end;
-        margin: 8px 0 4px;
-      }
       .refresh-button {
-        background: none;
-        border: 1.5px solid var(--line);
-        border-radius: 20px;
-        padding: 5px 14px;
-        font-size: 13px;
-        line-height: 1.2;
+        background: #f0f4fa;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 11px;
+        line-height: 1.4;
         color: var(--muted);
         cursor: pointer;
         transition: color 0.2s, border-color 0.2s;
         display: inline-flex;
         align-items: center;
-        gap: 4px;
+        gap: 3px;
       }
       .refresh-button:hover { color: var(--accent); border-color: var(--accent); }
       .refresh-button.spinning .refresh-icon { animation: spin 0.6s linear infinite; }
@@ -789,13 +784,10 @@
           <button class="button button-secondary auth-button" id="authLogoutButton" type="button">ログアウト</button>
           <button class="button button-secondary auth-button" id="authGuestButton" type="button" style="display:none;">ゲスト利用</button>
           <button class="button button-secondary auth-button" id="openSettingsButton" type="button">⚙ 設定</button>
+          <button class="refresh-button" id="refreshDashboardButton" type="button" title="データを更新"><span class="refresh-icon">↻</span> 更新</button>
         </div>
         <div class="guest-mode-notice" id="guestModeNotice" hidden>
           ゲスト利用中: データはこの端末のブラウザ内に保存されます。ブラウザデータ削除・端末変更・ストレージ整理で消える可能性があります。
-        </div>
-
-        <div class="refresh-row">
-          <button class="refresh-button" id="refreshDashboardButton" type="button" title="データを更新"><span class="refresh-icon">↻</span> 更新</button>
         </div>
 
         <div class="stats">
