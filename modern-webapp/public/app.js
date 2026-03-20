@@ -2204,7 +2204,8 @@ async function reloadData(message) {
 async function refreshDashboardInBackground_(options) {
   var force = options && options.force;
   try {
-    const data = await request('/api/dashboard');
+    const reqOptions = force ? { fromServer: true } : undefined;
+    const data = await request('/api/dashboard', reqOptions);
     if (!force) {
       const active = document.activeElement;
       const editingNow = Boolean(
@@ -3423,7 +3424,7 @@ async function firebaseRequest(url, options) {
   const body = options && options.body ? JSON.parse(options.body) : {};
 
   if (url === '/api/dashboard' && method === 'GET') {
-    return firebaseLoadDashboard_();
+    return firebaseLoadDashboard_(options);
   }
   if (url === '/api/items' && method === 'POST') {
     return firebaseSaveItem_(body);
@@ -3460,8 +3461,9 @@ async function firebaseRequest(url, options) {
   throw new Error('未対応のAPI呼び出しです。');
 }
 
-async function firebaseLoadDashboard_() {
-  const snapshot = await firebaseItemsCollection.get();
+async function firebaseLoadDashboard_(options) {
+  var getOptions = options && options.fromServer ? { source: 'server' } : undefined;
+  const snapshot = await firebaseItemsCollection.get(getOptions);
   firebaseItemsCache = snapshot.docs.map(function(doc) {
     const data = doc.data() || {};
     return {
