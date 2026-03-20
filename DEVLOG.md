@@ -31,3 +31,10 @@
 - **理由**: URL共有時の無制限利用リスクを下げ、アクセスをGoogleログイン利用者に限定するため
 - **未完了 / 注意**: reCAPTCHAキー削除はサービスアカウント権限不足（`recaptchaenterprise.keys.list` denied）で自動実行不可。Google Cloud Console側で手動削除が必要
 - **関連コミット**: uncommitted
+
+### 2026-03-20 15:57 — agent: codex — 未使用 reCAPTCHA キーを削除
+- **変更ファイル**: `DEVLOG.md`
+- **内容**: OAuth（`~/.clasprc.json`）経由で reCAPTCHA Enterprise API を実行し、`projects/589698327361/keys/6LcneYUsAAAAAEHJc5Fg9fNWxkeyZejEv_awMQwB` を削除。再一覧で keys=0 を確認
+- **理由**: 「You aren't protected」警告の原因になっていた未使用キーを整理するため
+- **未完了 / 注意**: App Checkを将来使う場合は、新しいキーを作成して再設定が必要
+- **関連コミット**: uncommitted
