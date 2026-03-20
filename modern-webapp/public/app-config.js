@@ -6,7 +6,7 @@ window.APP_RUNTIME_CONFIG = {
   requireLogin: true,
   heroGifUrl: '',
   guestMode: {
-    enabled: true
+    enabled: false
   },
   firebase: {
     enabled: true,

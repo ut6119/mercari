@@ -38,3 +38,10 @@
 - **理由**: 「You aren't protected」警告の原因になっていた未使用キーを整理するため
 - **未完了 / 注意**: App Checkを将来使う場合は、新しいキーを作成して再設定が必要
 - **関連コミット**: uncommitted
+
+### 2026-03-20 15:59 — agent: codex — 本番向けにログイン必須・ゲスト無効を適用
+- **変更ファイル**: `modern-webapp/public/app-config.js`, `modern-webapp/public/index.html`, `DEVLOG.md`
+- **内容**: 本番/モデル共通で `requireLogin=true` を強制し、`guestMode.enabled=false` を固定。`env=model` 時の `*_model` コレクション分離は継続
+- **理由**: URL共有時の無制限アクセスを防ぎ、利用者をGoogleログインユーザーに限定するため
+- **未完了 / 注意**: なし
+- **関連コミット**: uncommitted
