@@ -5000,10 +5000,10 @@ function playCoinRain_(intensity) {
     coin.decoding = 'async';
     coin.loading = 'eager';
 
-    var size = Math.round(22 + Math.random() * 26);
+    var size = Math.round(38 + Math.random() * 42);
     var leftPos = Math.random() * screenW;
-    var delay = (Math.random() * 1.2).toFixed(2);
-    var duration = (1.8 + Math.random() * 1.4).toFixed(2);
+    var delay = (Math.random() * 1.5).toFixed(2);
+    var duration = (3.0 + Math.random() * 2.0).toFixed(2);
     var sway = Math.round((Math.random() - 0.5) * 80);
     var spin = Math.round(360 + Math.random() * 720);
     var fallDist = window.innerHeight + size + 40;
