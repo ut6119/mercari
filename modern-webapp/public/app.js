@@ -1406,13 +1406,14 @@ function bindEvents() {
         return;
       }
       const targetItemId = addedItemId || findBottomItemIdByStatus_(payload.status);
+      var isSoldAdd = payload.status === 'sold';
       setTimeout(function() {
         scrollToItemRowAndAnimate_(
           targetItemId,
           payload.status,
           10,
           openQuickAddButton || addButton,
-          { burst: false, namePeek: true }
+          { burst: isSoldAdd, namePeek: true }
         );
       }, 80);
       showToast('商品を追加しました。');
@@ -4976,61 +4977,49 @@ function updateRowPreview(row, status) {
 
 function playCategoryBurst_(status, intensity, anchorEl) {
   if (!ENABLE_CATEGORY_BURST_EFFECTS) return;
-  if (!burstLayer) return;
-  if (burstLayer.childElementCount > 14) return;
-  const gifUrl = resolveBurstGifUrl_();
-  if (!gifUrl) return;
-
-  const targetPanel = status === 'sold' ? soldPanel : unsoldPanel;
-  const anchorRect = anchorEl ? anchorEl.getBoundingClientRect() : null;
-  const rect = targetPanel ? targetPanel.getBoundingClientRect() : null;
-  const anchorVisible = isRectVisibleInViewport_(anchorRect);
-  const panelVisible = isRectVisibleInViewport_(rect);
-  let centerX = window.innerWidth * 0.5;
-  let centerY = Math.min(window.innerHeight * 0.34, 220);
-  if (anchorVisible) {
-    centerX = anchorRect.left + anchorRect.width * 0.5;
-    centerY = anchorRect.top + anchorRect.height * 0.5;
-  } else if (panelVisible) {
-    centerX = rect.left + rect.width * 0.5;
-    centerY = rect.top + Math.min(82, Math.max(42, rect.height * 0.2));
+  // 販売済みの場合はコインレインを再生
+  if (status === 'sold') {
+    playCoinRain_(intensity);
+    return;
   }
-  const rawIntensity = Number(intensity) || 8;
-  const count = Math.max(2, Math.min(6, Math.round(rawIntensity * 0.5)));
+  // unsoldの場合はエフェクトなし
+}
 
-  for (let i = 0; i < count; i += 1) {
-    const angle = ((Math.PI * 2) / count) * i;
-    const distance = 180 + Math.random() * 220;
-    const dx = Math.cos(angle) * distance;
-    const dy = Math.sin(angle) * distance;
-    const size = Math.round(18 + Math.random() * 52);
-    const fromScale = (0.45 + Math.random() * 0.7).toFixed(2);
-    const toScale = (0.12 + Math.random() * 0.34).toFixed(2);
-    const fromRotate = Math.round((Math.random() * 90) - 45);
-    const rotateDir = Math.random() < 0.5 ? -1 : 1;
-    const toRotate = fromRotate + rotateDir * Math.round(120 + Math.random() * 220);
+function playCoinRain_(intensity) {
+  if (!burstLayer) return;
+  var coinUrl = 'assets/coin.png';
+  var rawIntensity = Number(intensity) || 8;
+  var count = Math.max(12, Math.min(40, Math.round(rawIntensity * 2.5)));
+  var screenW = window.innerWidth;
 
-    const sprite = document.createElement('img');
-    sprite.className = 'burst-gif';
-    sprite.src = gifUrl;
-    sprite.alt = '';
-    sprite.decoding = 'async';
-    sprite.loading = 'eager';
-    sprite.style.left = centerX.toFixed(1) + 'px';
-    sprite.style.top = centerY.toFixed(1) + 'px';
-    sprite.style.setProperty('--size', size + 'px');
-    sprite.style.setProperty('--dx', dx.toFixed(1) + 'px');
-    sprite.style.setProperty('--dy', dy.toFixed(1) + 'px');
-    sprite.style.setProperty('--from-scale', fromScale);
-    sprite.style.setProperty('--to-scale', toScale);
-    sprite.style.setProperty('--from-rotate', fromRotate + 'deg');
-    sprite.style.setProperty('--to-rotate', toRotate + 'deg');
-    sprite.style.animationDuration = '5000ms';
-    sprite.style.animationDelay = Math.round(Math.random() * 120) + 'ms';
-    sprite.addEventListener('animationend', function() {
-      sprite.remove();
+  for (var i = 0; i < count; i += 1) {
+    var coin = document.createElement('img');
+    coin.className = 'coin-rain';
+    coin.src = coinUrl;
+    coin.alt = '';
+    coin.decoding = 'async';
+    coin.loading = 'eager';
+
+    var size = Math.round(22 + Math.random() * 26);
+    var leftPos = Math.random() * screenW;
+    var delay = (Math.random() * 1.2).toFixed(2);
+    var duration = (1.8 + Math.random() * 1.4).toFixed(2);
+    var sway = Math.round((Math.random() - 0.5) * 80);
+    var spin = Math.round(360 + Math.random() * 720);
+    var fallDist = window.innerHeight + size + 40;
+
+    coin.style.left = leftPos.toFixed(1) + 'px';
+    coin.style.setProperty('--size', size + 'px');
+    coin.style.setProperty('--delay', delay + 's');
+    coin.style.setProperty('--duration', duration + 's');
+    coin.style.setProperty('--sway', sway + 'px');
+    coin.style.setProperty('--spin', spin + 'deg');
+    coin.style.setProperty('--fall-dist', fallDist + 'px');
+
+    coin.addEventListener('animationend', function() {
+      this.remove();
     }, { once: true });
-    burstLayer.appendChild(sprite);
+    burstLayer.appendChild(coin);
   }
 }
 

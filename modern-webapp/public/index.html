@@ -731,6 +731,33 @@
             rotate(var(--to-rotate, 140deg));
         }
       }
+      .coin-rain {
+        position: fixed;
+        top: calc(-1 * var(--size, 32px));
+        width: var(--size, 32px);
+        height: var(--size, 32px);
+        object-fit: contain;
+        opacity: 0;
+        pointer-events: none;
+        z-index: 81;
+        animation: coin-fall var(--duration, 2.2s) var(--delay, 0s) cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+      }
+      @keyframes coin-fall {
+        0% {
+          opacity: 1;
+          transform: translateX(0) translateY(0) rotate(0deg);
+        }
+        20% {
+          opacity: 1;
+        }
+        85% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+          transform: translateX(var(--sway, 30px)) translateY(var(--fall-dist, 110vh)) rotate(var(--spin, 720deg));
+        }
+      }
       .row-focus-flash {
         animation: row-focus-flash 1500ms ease-out;
       }
