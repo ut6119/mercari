@@ -2922,6 +2922,12 @@ async function guestRequest(url, options) {
     const now = Date.now();
     const id = String(item.id || createGuestItemId_());
     const existing = guestItemsCache.find(function(candidate) { return candidate.id === id; });
+    var soldAtMs = existing ? (existing.soldAtMs || 0) : 0;
+    if (item.status === 'sold' && (!existing || existing.status !== 'sold')) {
+      soldAtMs = now;
+    } else if (item.status !== 'sold') {
+      soldAtMs = 0;
+    }
     const stored = {
       id: id,
       status: item.status,
@@ -2931,7 +2937,8 @@ async function guestRequest(url, options) {
       cost: item.cost,
       transport: item.transport,
       createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : now,
-      updatedAtMs: now
+      updatedAtMs: now,
+      soldAtMs: soldAtMs
     };
     if (existing) {
       Object.assign(existing, stored);
@@ -2994,6 +3001,11 @@ async function guestRequest(url, options) {
       }
       guestItemsCache.forEach(function(item) {
         if (idSet.has(item.id)) {
+          if (normalizedStatus === 'sold' && item.status !== 'sold') {
+            item.soldAtMs = now;
+          } else if (normalizedStatus !== 'sold') {
+            item.soldAtMs = 0;
+          }
           item.status = normalizedStatus;
           item.updatedAtMs = now;
         }
@@ -3475,7 +3487,8 @@ async function firebaseLoadDashboard_(options) {
       cost: sanitizeAmount_(data.cost),
       transport: sanitizeAmount_(data.transport),
       createdAtMs: toTimestampMs_(data.createdAtMs),
-      updatedAtMs: toTimestampMs_(data.updatedAtMs)
+      updatedAtMs: toTimestampMs_(data.updatedAtMs),
+      soldAtMs: toTimestampMs_(data.soldAtMs)
     };
   });
   return buildDashboardDataFromItems_(firebaseItemsCache);
@@ -3628,6 +3641,12 @@ async function firebaseSaveItem_(payload) {
   const existing = firebaseItemsCache.find(function(candidate) {
     return candidate.id === id;
   });
+  var soldAtMs = existing ? (existing.soldAtMs || 0) : 0;
+  if (item.status === 'sold' && (!existing || existing.status !== 'sold')) {
+    soldAtMs = now;
+  } else if (item.status !== 'sold') {
+    soldAtMs = 0;
+  }
   const stored = {
     id: id,
     status: item.status,
@@ -3646,14 +3665,15 @@ async function firebaseSaveItem_(payload) {
     cost: stored.cost,
     transport: stored.transport,
     createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : (item.createdAtMs || now),
-    updatedAtMs: now
+    updatedAtMs: now,
+    soldAtMs: soldAtMs
   }, { merge: true });
 
   var effectiveCreatedAt = existing && existing.createdAtMs ? existing.createdAtMs : (item.createdAtMs || now);
   if (existing) {
-    Object.assign(existing, stored, { updatedAtMs: now });
+    Object.assign(existing, stored, { updatedAtMs: now, soldAtMs: soldAtMs });
   } else {
-    firebaseItemsCache.push(Object.assign({}, stored, { createdAtMs: effectiveCreatedAt, updatedAtMs: now }));
+    firebaseItemsCache.push(Object.assign({}, stored, { createdAtMs: effectiveCreatedAt, updatedAtMs: now, soldAtMs: soldAtMs }));
     void firebaseRecordMonthlyAddition_(effectiveCreatedAt);
   }
 
@@ -3768,15 +3788,29 @@ async function firebaseMoveItems_(itemIds, targetStatus) {
 
   const batch = firebaseDb.batch();
   moving.forEach(function(item) {
+    var newSoldAtMs = 0;
+    if (normalizedStatus === 'sold' && item.status !== 'sold') {
+      newSoldAtMs = now;
+    } else if (normalizedStatus !== 'sold') {
+      newSoldAtMs = 0;
+    } else {
+      newSoldAtMs = item.soldAtMs || 0;
+    }
     batch.set(firebaseItemsCollection.doc(item.id), {
       status: normalizedStatus,
-      updatedAtMs: now
+      updatedAtMs: now,
+      soldAtMs: newSoldAtMs
     }, { merge: true });
   });
   await batch.commit();
 
   firebaseItemsCache.forEach(function(item) {
     if (idSet.has(item.id)) {
+      if (normalizedStatus === 'sold' && item.status !== 'sold') {
+        item.soldAtMs = now;
+      } else if (normalizedStatus !== 'sold') {
+        item.soldAtMs = 0;
+      }
       item.status = normalizedStatus;
       item.updatedAtMs = now;
     }
@@ -4134,6 +4168,7 @@ function enrichItem_(item) {
     transport: transport,
     createdAtMs: toTimestampMs_(item.createdAtMs),
     updatedAtMs: toTimestampMs_(item.updatedAtMs),
+    soldAtMs: toTimestampMs_(item.soldAtMs),
     fee: fee,
     profit: profit,
     margin: margin
@@ -4772,6 +4807,7 @@ function renderSoldRow(item) {
       <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
       <td class="center date-cell">${formatDateShort_(item.createdAtMs)}</td>
+      <td class="center date-cell">${formatDateShort_(item.soldAtMs)}</td>
     </tr>
   `;
 }
@@ -4795,6 +4831,7 @@ function renderUnsoldRow(item) {
       <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
       <td class="center date-cell">${formatDateShort_(item.createdAtMs)}</td>
+      <td class="center date-cell">${formatDateShort_(item.soldAtMs)}</td>
     </tr>
   `;
 }
