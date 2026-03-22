@@ -4989,7 +4989,7 @@ function playCoinRain_(intensity) {
   if (!burstLayer) return;
   var coinUrl = 'assets/coin.png?v=20260322';
   var rawIntensity = Number(intensity) || 8;
-  var count = Math.max(12, Math.min(40, Math.round(rawIntensity * 2.5)));
+  var count = Math.max(30, Math.min(80, Math.round(rawIntensity * 5)));
   var screenW = window.innerWidth;
 
   for (var i = 0; i < count; i += 1) {
