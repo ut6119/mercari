@@ -4987,7 +4987,7 @@ function playCategoryBurst_(status, intensity, anchorEl) {
 
 function playCoinRain_(intensity) {
   if (!burstLayer) return;
-  var coinUrl = 'assets/coin.png';
+  var coinUrl = 'assets/coin.png?v=20260322';
   var rawIntensity = Number(intensity) || 8;
   var count = Math.max(12, Math.min(40, Math.round(rawIntensity * 2.5)));
   var screenW = window.innerWidth;
