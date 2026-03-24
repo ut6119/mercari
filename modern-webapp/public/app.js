@@ -343,8 +343,12 @@ function activateView_(viewName) {
   if (monthlyView) monthlyView.classList.toggle('active', target === 'monthly');
   if (chartView) chartView.classList.toggle('active', target === 'chart');
   var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
-  if (isModel && target !== 'monthly') {
-    restoreTopStats_();
+  if (isModel) {
+    if (target === 'monthly') {
+      applyMonthlyTopStats_();
+    } else {
+      restoreTopStats_();
+    }
   }
 }
 
@@ -367,6 +371,16 @@ function updateTopStatsForMonthly_(summary, totalCount) {
     + '  <div class="stat-value">' + formatSignedYen(summary.overallNet) + '</div>'
     + '  <div class="stat-note">利益率 ' + formatPercent(summary.overallMargin) + '</div>'
     + '</div>';
+}
+
+function applyMonthlyTopStats_() {
+  var months = monthlyState.months;
+  if (!months.length) return;
+  var selected = months.find(function(e) { return e.month === monthlyState.selectedMonth; }) || months[0];
+  var summary = selected.summary || {};
+  var soldCount = sanitizeAmount_(summary.soldCount);
+  var unsoldCount = sanitizeAmount_(summary.unsoldCount);
+  updateTopStatsForMonthly_(summary, soldCount + unsoldCount);
 }
 
 function restoreTopStats_() {
