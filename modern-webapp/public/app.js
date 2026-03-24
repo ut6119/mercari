@@ -5517,15 +5517,15 @@ function showToast(message) {
     tbody.addEventListener('touchend', function() { clearLongPress(); }, { passive: true });
   });
 
-  // タップで選択モード解除
+  // タップで選択モード解除（テーブル・ツールバー外のみ）
   document.addEventListener('touchend', function(e) {
     if (longPressFired) { longPressFired = false; return; }
-    var inSold = e.target.closest('#soldTableBody');
-    var inUnsold = e.target.closest('#unsoldTableBody');
-    if (selectionMode.sold && !inSold) {
+    var inSoldPanel = e.target.closest('#soldPanel');
+    var inUnsoldPanel = e.target.closest('#unsoldPanel');
+    if (selectionMode.sold && !inSoldPanel) {
       setSelectionMode('sold', false);
     }
-    if (selectionMode.unsold && !inUnsold) {
+    if (selectionMode.unsold && !inUnsoldPanel) {
       setSelectionMode('unsold', false);
     }
   }, { passive: true });
