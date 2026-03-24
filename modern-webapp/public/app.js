@@ -5462,10 +5462,8 @@ function showToast(message) {
   }, 2600);
 }
 
-// --- Swipe-to-delete (model only) ---
+// --- Swipe-to-delete ---
 (function() {
-  var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
-  if (!isModel) return;
 
   var SWIPE_THRESHOLD = 70;
   var DELETE_BTN_WIDTH = 80;
