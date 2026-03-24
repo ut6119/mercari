@@ -360,6 +360,7 @@ function updateTopStatsForMonthly_(summary, totalCount) {
   if (!statsEl) return;
   if (topStatsOriginalHtml_ === null) {
     topStatsOriginalHtml_ = statsEl.innerHTML;
+    statsEl.style.minHeight = statsEl.offsetHeight + 'px';
   }
   statsEl.innerHTML = ''
     + '<div class="stat">'
@@ -389,6 +390,7 @@ function restoreTopStats_() {
   var statsEl = document.querySelector('.stats');
   if (statsEl) {
     statsEl.innerHTML = topStatsOriginalHtml_;
+    statsEl.style.minHeight = '';
   }
   topStatsOriginalHtml_ = null;
 }
