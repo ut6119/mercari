@@ -362,7 +362,15 @@ function updateTopStatsForMonthly_(summary, totalCount) {
     topStatsOriginalHtml_ = statsEl.innerHTML;
     statsEl.style.minHeight = statsEl.offsetHeight + 'px';
   }
-  statsEl.innerHTML = ''
+  // 月選択ボタンをカード領域に配置
+  var months = monthlyState.months;
+  var switchHtml = '<div class="monthly-switch monthly-switch-top">' + months.map(function(entry) {
+    var month = String(entry.month || '');
+    var active = month === monthlyState.selectedMonth;
+    return '<button class="monthly-button' + (active ? ' active' : '') + '" type="button" data-month="' + escapeHtml(month) + '">' + escapeHtml(month) + '</button>';
+  }).join('') + '</div>';
+
+  statsEl.innerHTML = switchHtml
     + '<div class="stat">'
     + '  <div class="stat-label">原価合計</div>'
     + '  <div class="stat-value">' + formatYen(sanitizeAmount_(summary.soldCost) + sanitizeAmount_(summary.unsoldCost)) + '</div>'
@@ -373,6 +381,23 @@ function updateTopStatsForMonthly_(summary, totalCount) {
     + '  <div class="stat-value">' + formatSignedYen(summary.overallNet) + '</div>'
     + '  <div class="stat-note">利益率 ' + formatPercent(summary.overallMargin) + '</div>'
     + '</div>';
+
+  // カード領域内の月ボタンにイベント委譲
+  statsEl.addEventListener('click', handleTopMonthSwitch_);
+  // 月別ビュー内の月選択・ヘッダーを非表示
+  if (monthlySwitch) monthlySwitch.style.display = 'none';
+  var monthlyH2 = monthlyView.querySelector('h2');
+  if (monthlyH2) monthlyH2.style.display = 'none';
+}
+
+function handleTopMonthSwitch_(e) {
+  var btn = e.target.closest('button[data-month]');
+  if (!btn) return;
+  var month = String(btn.dataset.month || '').trim();
+  if (!month) return;
+  monthlyState.selectedMonth = month;
+  selectedMonthlyItemIds.clear();
+  renderMonthlyViews_();
 }
 
 function applyMonthlyTopStats_() {
@@ -389,9 +414,13 @@ function restoreTopStats_() {
   if (topStatsOriginalHtml_ === null) return;
   var statsEl = document.querySelector('.stats');
   if (statsEl) {
+    statsEl.removeEventListener('click', handleTopMonthSwitch_);
     statsEl.innerHTML = topStatsOriginalHtml_;
     statsEl.style.minHeight = '';
   }
+  if (monthlySwitch) monthlySwitch.style.display = '';
+  var monthlyH2 = monthlyView ? monthlyView.querySelector('h2') : null;
+  if (monthlyH2) monthlyH2.style.display = '';
   topStatsOriginalHtml_ = null;
 }
 
