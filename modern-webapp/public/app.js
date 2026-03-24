@@ -342,19 +342,14 @@ function activateView_(viewName) {
   if (homeView) homeView.classList.toggle('active', target === 'home');
   if (monthlyView) monthlyView.classList.toggle('active', target === 'monthly');
   if (chartView) chartView.classList.toggle('active', target === 'chart');
-  var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
-  if (isModel) {
-    if (target === 'monthly') {
-      applyMonthlyTopStats_();
-    } else {
-      restoreTopStats_();
-    }
+  if (target === 'monthly') {
+    applyMonthlyTopStats_();
+  } else {
+    restoreTopStats_();
   }
 }
 
 function updateTopStatsForMonthly_(summary, totalCount) {
-  var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
-  if (!isModel) return;
   if (!monthlyView || !monthlyView.classList.contains('active')) return;
   var statsEl = document.querySelector('.stats');
   if (!statsEl) return;
@@ -4555,24 +4550,7 @@ function renderMonthlyViews_() {
     : null;
   const monthOverMonth = getMonthOverMonth_(summary, previousSummary);
 
-  var isModelEnv_ = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
-  if (isModelEnv_) {
-    monthlySummaryGrid.innerHTML = '';
-  } else {
-    monthlySummaryGrid.innerHTML = ''
-      + '<div class="monthly-metric monthly-metric-split">'
-      + '  <div class="monthly-metric-main">'
-      + '    <div class="monthly-metric-label">合計収支</div>'
-      + '    <div class="monthly-metric-value">' + formatSignedYen(summary.overallNet) + '</div>'
-      + '    <div class="monthly-metric-note">' + totalCount + '件 / 利益率 ' + formatPercent(summary.overallMargin) + '</div>'
-      + '  </div>'
-      + '  <div class="monthly-metric-side">'
-      + '    <div class="monthly-metric-label">前月比</div>'
-      + '    <div class="monthly-metric-delta ' + monthOverMonth.className + '">' + monthOverMonth.arrow + ' ' + monthOverMonth.rateText + '</div>'
-      + '    <div class="monthly-metric-note">' + monthOverMonth.amountText + '</div>'
-      + '  </div>'
-      + '</div>';
-  }
+  monthlySummaryGrid.innerHTML = '';
   updateTopStatsForMonthly_(summary, totalCount);
 
   const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
