@@ -5461,3 +5461,168 @@ function showToast(message) {
     toast.classList.remove('show');
   }, 2600);
 }
+
+// --- Swipe-to-delete (model only) ---
+(function() {
+  var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
+  if (!isModel) return;
+
+  var SWIPE_THRESHOLD = 70;
+  var DELETE_BTN_WIDTH = 80;
+  var activeRow = null;
+  var openRow = null;
+  var deleteBtn = null;
+  var startX = 0;
+  var startY = 0;
+  var currentX = 0;
+  var swiping = false;
+
+  function createDeleteBtn() {
+    deleteBtn = document.createElement('div');
+    deleteBtn.className = 'swipe-delete-bg';
+    deleteBtn.textContent = '削除';
+    deleteBtn.addEventListener('click', function() {
+      if (!openRow) return;
+      var id = openRow.dataset.id;
+      var status = openRow.closest('#soldTableBody') ? 'sold' : 'unsold';
+      closeSwipe();
+      deleteSwipedItem_(id, status);
+    });
+    document.body.appendChild(deleteBtn);
+  }
+
+  function positionDeleteBtn(row) {
+    var rect = row.getBoundingClientRect();
+    deleteBtn.style.position = 'fixed';
+    deleteBtn.style.top = rect.top + 'px';
+    deleteBtn.style.left = rect.left + 'px';
+    deleteBtn.style.height = rect.height + 'px';
+    deleteBtn.classList.add('visible');
+  }
+
+  function setRowTranslate(row, x) {
+    var tds = row.querySelectorAll('td');
+    for (var i = 0; i < tds.length; i++) {
+      tds[i].style.transform = x ? 'translateX(' + x + 'px)' : '';
+    }
+  }
+
+  function openSwipe(row) {
+    row.classList.remove('swipe-dragging');
+    row.classList.add('swipe-active');
+    setRowTranslate(row, DELETE_BTN_WIDTH);
+    positionDeleteBtn(row);
+    openRow = row;
+  }
+
+  function closeSwipe() {
+    if (openRow) {
+      openRow.classList.remove('swipe-dragging');
+      openRow.classList.add('swipe-active');
+      setRowTranslate(openRow, 0);
+      openRow = null;
+    }
+    if (deleteBtn) {
+      deleteBtn.classList.remove('visible');
+    }
+  }
+
+  async function deleteSwipedItem_(id, status) {
+    if (!id) return;
+    if (!window.confirm('この商品を削除しますか？')) return;
+    try {
+      var data;
+      if (!USE_LOCAL_API) {
+        data = await request('/api/items/bulk', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'deleteMany', itemIds: [id] })
+        });
+      } else {
+        data = await request('/api/items/' + encodeURIComponent(id), { method: 'DELETE' });
+      }
+      currentData = data;
+      render(data);
+      showToast('削除しました');
+    } catch (err) {
+      showToast(err.message || '削除に失敗しました');
+    }
+  }
+
+  function handleTouchStart(e) {
+    var row = e.target.closest('tr[data-id]');
+    if (!row) return;
+    if (e.target.closest('input, button, a, [data-select-row]')) return;
+
+    if (openRow && openRow !== row) {
+      closeSwipe();
+    }
+
+    activeRow = row;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    currentX = 0;
+    swiping = false;
+  }
+
+  function handleTouchMove(e) {
+    if (!activeRow) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+
+    if (!swiping && Math.abs(dy) > Math.abs(dx)) {
+      activeRow = null;
+      return;
+    }
+
+    if (Math.abs(dx) > 10) {
+      swiping = true;
+    }
+    if (!swiping) return;
+
+    e.preventDefault();
+    currentX = Math.max(0, Math.min(dx, DELETE_BTN_WIDTH + 20));
+    activeRow.classList.add('swipe-dragging');
+    activeRow.classList.remove('swipe-active');
+    setRowTranslate(activeRow, currentX);
+
+    if (currentX > SWIPE_THRESHOLD / 2) {
+      if (!deleteBtn) createDeleteBtn();
+      positionDeleteBtn(activeRow);
+    }
+  }
+
+  function handleTouchEnd() {
+    if (!activeRow) return;
+    if (currentX >= SWIPE_THRESHOLD) {
+      if (!deleteBtn) createDeleteBtn();
+      openSwipe(activeRow);
+    } else {
+      activeRow.classList.remove('swipe-dragging');
+      activeRow.classList.add('swipe-active');
+      setRowTranslate(activeRow, 0);
+      if (openRow === activeRow) {
+        openRow = null;
+        if (deleteBtn) deleteBtn.classList.remove('visible');
+      }
+    }
+    activeRow = null;
+    swiping = false;
+  }
+
+  document.addEventListener('touchstart', function(e) {
+    if (!deleteBtn) createDeleteBtn();
+    var row = e.target.closest('tr[data-id]');
+    if (!row && openRow && !e.target.closest('.swipe-delete-bg')) {
+      closeSwipe();
+    }
+  }, { passive: true });
+
+  var soldTbody = document.getElementById('soldTableBody');
+  var unsoldTbody = document.getElementById('unsoldTableBody');
+  [soldTbody, unsoldTbody].forEach(function(tbody) {
+    if (!tbody) return;
+    tbody.addEventListener('touchstart', handleTouchStart, { passive: true });
+    tbody.addEventListener('touchmove', handleTouchMove, { passive: false });
+    tbody.addEventListener('touchend', handleTouchEnd, { passive: true });
+  });
+})();
