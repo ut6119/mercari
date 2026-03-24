@@ -5607,6 +5607,53 @@ function showToast(message) {
     swiping = false;
   }
 
+  // --- Long-press to select ---
+  var LONG_PRESS_MS = 500;
+  var longPressTimer = null;
+  var longPressFired = false;
+
+  function clearLongPress() {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
+
+  function handleLongPressStart(e) {
+    var row = e.target.closest('tr[data-id]');
+    if (!row) return;
+    if (e.target.closest('input, button, a')) return;
+    longPressFired = false;
+    clearLongPress();
+    longPressTimer = setTimeout(function() {
+      longPressFired = true;
+      longPressTimer = null;
+      // cancel any ongoing swipe
+      activeRow = null;
+      swiping = false;
+      var status = row.closest('#soldTableBody') ? 'sold' : 'unsold';
+      if (!selectionMode[status]) {
+        setSelectionMode(status, true);
+      }
+      var checkbox = row.querySelector('[data-select-row]');
+      if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, LONG_PRESS_MS);
+  }
+
+  function handleLongPressMove(e) {
+    if (!longPressTimer) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      clearLongPress();
+    }
+  }
+
+  function handleLongPressEnd() {
+    clearLongPress();
+  }
+
   document.addEventListener('touchstart', function(e) {
     if (!deleteBtn) createDeleteBtn();
     var row = e.target.closest('tr[data-id]');
@@ -5619,8 +5666,18 @@ function showToast(message) {
   var unsoldTbody = document.getElementById('unsoldTableBody');
   [soldTbody, unsoldTbody].forEach(function(tbody) {
     if (!tbody) return;
-    tbody.addEventListener('touchstart', handleTouchStart, { passive: true });
-    tbody.addEventListener('touchmove', handleTouchMove, { passive: false });
-    tbody.addEventListener('touchend', handleTouchEnd, { passive: true });
+    tbody.addEventListener('touchstart', function(e) {
+      handleTouchStart(e);
+      handleLongPressStart(e);
+    }, { passive: true });
+    tbody.addEventListener('touchmove', function(e) {
+      handleLongPressMove(e);
+      handleTouchMove(e);
+    }, { passive: false });
+    tbody.addEventListener('touchend', function(e) {
+      handleLongPressEnd();
+      if (longPressFired) { activeRow = null; swiping = false; return; }
+      handleTouchEnd(e);
+    }, { passive: true });
   });
 })();
