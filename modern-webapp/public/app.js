@@ -1564,7 +1564,7 @@ function bindEvents() {
 function readRowPayload(row, status) {
   const shippingRaw = row.querySelector('[data-field="shipping"]').value;
   const transportRaw = row.dataset.transport || '0';
-  return {
+  var payload = {
     id: row.dataset.id,
     status: status,
     name: row.querySelector('[data-field="name"]').value.trim(),
@@ -1573,6 +1573,11 @@ function readRowPayload(row, status) {
     cost: row.querySelector('[data-field="cost"]').value,
     transport: transportRaw
   };
+  var createdAtInput = row.querySelector('[data-field="createdAtMs"]');
+  var soldAtInput = row.querySelector('[data-field="soldAtMs"]');
+  if (createdAtInput) payload.createdAtMsInput = createdAtInput.value;
+  if (soldAtInput) payload.soldAtMsInput = soldAtInput.value;
+  return payload;
 }
 
 async function handleBulkAction(status, event) {
@@ -2923,10 +2928,16 @@ async function guestRequest(url, options) {
     const id = String(item.id || createGuestItemId_());
     const existing = guestItemsCache.find(function(candidate) { return candidate.id === id; });
     var soldAtMs = existing ? (existing.soldAtMs || 0) : 0;
-    if (item.status === 'sold' && (!existing || existing.status !== 'sold')) {
+    if (typeof item.soldAtMsInput === 'string') {
+      soldAtMs = parseDateInput_(item.soldAtMsInput, existing ? existing.soldAtMs : 0);
+    } else if (item.status === 'sold' && (!existing || existing.status !== 'sold')) {
       soldAtMs = now;
     } else if (item.status !== 'sold') {
       soldAtMs = 0;
+    }
+    var effectiveCreatedAt = existing && existing.createdAtMs ? existing.createdAtMs : now;
+    if (typeof item.createdAtMsInput === 'string') {
+      effectiveCreatedAt = parseDateInput_(item.createdAtMsInput, effectiveCreatedAt);
     }
     const stored = {
       id: id,
@@ -2936,7 +2947,7 @@ async function guestRequest(url, options) {
       shipping: item.shipping,
       cost: item.cost,
       transport: item.transport,
-      createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : now,
+      createdAtMs: effectiveCreatedAt,
       updatedAtMs: now,
       soldAtMs: soldAtMs
     };
@@ -3642,11 +3653,19 @@ async function firebaseSaveItem_(payload) {
     return candidate.id === id;
   });
   var soldAtMs = existing ? (existing.soldAtMs || 0) : 0;
-  if (item.status === 'sold' && (!existing || existing.status !== 'sold')) {
+  if (typeof item.soldAtMsInput === 'string') {
+    soldAtMs = parseDateInput_(item.soldAtMsInput, existing ? existing.soldAtMs : 0);
+  } else if (item.status === 'sold' && (!existing || existing.status !== 'sold')) {
     soldAtMs = now;
   } else if (item.status !== 'sold') {
     soldAtMs = 0;
   }
+
+  var effectiveCreatedAt = existing && existing.createdAtMs ? existing.createdAtMs : (item.createdAtMs || now);
+  if (typeof item.createdAtMsInput === 'string') {
+    effectiveCreatedAt = parseDateInput_(item.createdAtMsInput, effectiveCreatedAt);
+  }
+
   const stored = {
     id: id,
     status: item.status,
@@ -3664,14 +3683,13 @@ async function firebaseSaveItem_(payload) {
     shipping: stored.shipping,
     cost: stored.cost,
     transport: stored.transport,
-    createdAtMs: existing && existing.createdAtMs ? existing.createdAtMs : (item.createdAtMs || now),
+    createdAtMs: effectiveCreatedAt,
     updatedAtMs: now,
     soldAtMs: soldAtMs
   }, { merge: true });
 
-  var effectiveCreatedAt = existing && existing.createdAtMs ? existing.createdAtMs : (item.createdAtMs || now);
   if (existing) {
-    Object.assign(existing, stored, { updatedAtMs: now, soldAtMs: soldAtMs });
+    Object.assign(existing, stored, { createdAtMs: effectiveCreatedAt, updatedAtMs: now, soldAtMs: soldAtMs });
   } else {
     firebaseItemsCache.push(Object.assign({}, stored, { createdAtMs: effectiveCreatedAt, updatedAtMs: now, soldAtMs: soldAtMs }));
     void firebaseRecordMonthlyAddition_(effectiveCreatedAt);
@@ -4145,6 +4163,8 @@ function sanitizePayloadForStore_(payload) {
     transport: transport
   };
   if (source.createdAtMs) result.createdAtMs = source.createdAtMs;
+  if (typeof source.createdAtMsInput === 'string') result.createdAtMsInput = source.createdAtMsInput;
+  if (typeof source.soldAtMsInput === 'string') result.soldAtMsInput = source.soldAtMsInput;
   return result;
 }
 
@@ -4806,8 +4826,8 @@ function renderSoldRow(item) {
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
-      <td class="center date-cell">${formatDateShort_(item.createdAtMs)}</td>
-      <td class="center date-cell">${formatDateShort_(item.soldAtMs)}</td>
+      <td class="center date-cell"><input data-field="createdAtMs" class="date-input" value="${escapeHtml(formatDateShort_(item.createdAtMs))}" placeholder="--"></td>
+      <td class="center date-cell"><input data-field="soldAtMs" class="date-input" value="${escapeHtml(formatDateShort_(item.soldAtMs))}" placeholder="--"></td>
     </tr>
   `;
 }
@@ -4830,8 +4850,8 @@ function renderUnsoldRow(item) {
       <td><input data-field="cost" type="number" min="0" step="1" value="${escapeHtml(String(item.cost || 0))}"></td>
       <td class="money profit-cell">${formatSignedYen(item.profit)}</td>
       <td class="rate"><span class="pill rate-pill ${rateClass}">${formatPercent(item.margin)}</span></td>
-      <td class="center date-cell">${formatDateShort_(item.createdAtMs)}</td>
-      <td class="center date-cell">${formatDateShort_(item.soldAtMs)}</td>
+      <td class="center date-cell"><input data-field="createdAtMs" class="date-input" value="${escapeHtml(formatDateShort_(item.createdAtMs))}" placeholder="--"></td>
+      <td class="center date-cell"><input data-field="soldAtMs" class="date-input" value="${escapeHtml(formatDateShort_(item.soldAtMs))}" placeholder="--"></td>
     </tr>
   `;
 }
@@ -5388,9 +5408,29 @@ function setDefaultShipping_(value) {
 }
 
 function formatDateShort_(ms) {
-  if (!ms || !Number.isFinite(Number(ms)) || Number(ms) <= 0) return '--';
+  if (!ms || !Number.isFinite(Number(ms)) || Number(ms) <= 0) return '';
   const d = new Date(Number(ms));
   return (d.getMonth() + 1) + '/' + d.getDate();
+}
+
+function parseDateInput_(str, fallbackMs) {
+  if (!str || typeof str !== 'string') return fallbackMs || 0;
+  var s = str.trim();
+  if (!s) return fallbackMs || 0;
+  // YYYY/M/D or YYYY-M-D
+  var full = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (full) {
+    var d = new Date(Number(full[1]), Number(full[2]) - 1, Number(full[3]), 12, 0, 0);
+    return d.getTime();
+  }
+  // M/D or M-D — use current year (or fallback year)
+  var short = s.match(/^(\d{1,2})[\/\-](\d{1,2})$/);
+  if (short) {
+    var year = fallbackMs ? new Date(Number(fallbackMs)).getFullYear() : new Date().getFullYear();
+    var d2 = new Date(year, Number(short[1]) - 1, Number(short[2]), 12, 0, 0);
+    return d2.getTime();
+  }
+  return fallbackMs || 0;
 }
 
 function formatSignedPercent_(value) {

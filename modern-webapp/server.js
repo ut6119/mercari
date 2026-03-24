@@ -580,7 +580,7 @@ function sanitizePayload(payload) {
     throw createBadRequest('金額は0以上で入力してください。');
   }
 
-  return {
+  var result = {
     id: String(source.id || crypto.randomUUID()),
     status,
     name,
@@ -590,6 +590,9 @@ function sanitizePayload(payload) {
       : (shippingInput === '' ? '' : shippingInput),
     cost
   };
+  if (typeof source.createdAtMsInput === 'string') result.createdAtMsInput = source.createdAtMsInput;
+  if (typeof source.soldAtMsInput === 'string') result.soldAtMsInput = source.soldAtMsInput;
+  return result;
 }
 
 function enrichItem(item) {
