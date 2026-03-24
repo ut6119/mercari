@@ -4473,7 +4473,8 @@ function renderMonthlyViews_() {
     : null;
   const monthOverMonth = getMonthOverMonth_(summary, previousSummary);
 
-  monthlySummaryGrid.innerHTML = ''
+  monthlySummaryGrid.classList.remove('two-cards');
+  var monthlySummaryHtml = ''
     + '<div class="monthly-metric monthly-metric-split">'
     + '  <div class="monthly-metric-main">'
     + '    <div class="monthly-metric-label">合計収支</div>'
@@ -4486,6 +4487,21 @@ function renderMonthlyViews_() {
     + '    <div class="monthly-metric-note">' + monthOverMonth.amountText + '</div>'
     + '  </div>'
     + '</div>';
+  if (window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model') {
+    monthlySummaryGrid.classList.add('two-cards');
+    monthlySummaryHtml = ''
+      + '<div class="monthly-metric">'
+      + '  <div class="monthly-metric-label">原価合計</div>'
+      + '  <div class="monthly-metric-value">' + formatYen(sanitizeAmount_(summary.soldCost) + sanitizeAmount_(summary.unsoldCost)) + '</div>'
+      + '  <div class="monthly-metric-note">' + totalCount + '件</div>'
+      + '</div>'
+      + '<div class="monthly-metric">'
+      + '  <div class="monthly-metric-label">利益合計</div>'
+      + '  <div class="monthly-metric-value">' + formatSignedYen(summary.overallNet) + '</div>'
+      + '  <div class="monthly-metric-note">利益率 ' + formatPercent(summary.overallMargin) + '</div>'
+      + '</div>';
+  }
+  monthlySummaryGrid.innerHTML = monthlySummaryHtml;
 
   const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
   updateMonthlySoldCountLabel_(soldItems.length);
