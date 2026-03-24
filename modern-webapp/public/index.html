@@ -1015,9 +1015,11 @@
             <div class="monthly-switch" id="monthlySwitch"></div>
             <div class="monthly-summary-grid" id="monthlySummaryGrid"></div>
             <div class="monthly-board" id="monthlySoldBoard">
-              <div class="monthly-board-head">
-                <h3 class="monthly-board-title">販売済み</h3>
-                <span id="monthlySoldCountLabel">0件</span>
+              <div class="board-head">
+                <h3>販売済み</h3>
+                <div class="board-head-right">
+                  <span id="monthlySoldCountLabel">0件</span>
+                </div>
               </div>
               <div class="bulk-toolbar" id="monthlySoldToolbar">
                 <button class="button button-secondary bulk-button" type="button" data-monthly-action="toggle-selection">選択</button>
@@ -1035,11 +1037,13 @@
                     <col class="col-cost">
                     <col class="col-profit">
                     <col class="col-rate">
+                    <col class="col-date">
+                    <col class="col-date">
                   </colgroup>
                   <thead>
                     <tr>
                       <th class="center selection-col">選択</th><th>名前</th><th class="center">売上</th><th class="center">送料</th>
-                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th>
+                      <th class="center">原価</th><th class="center">利益</th><th class="center">利益率</th><th class="center date-cell">入荷日</th><th class="center date-cell">売却日</th>
                     </tr>
                   </thead>
                   <tbody id="monthlySoldBody"></tbody>

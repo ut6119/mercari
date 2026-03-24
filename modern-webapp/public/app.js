@@ -4515,7 +4515,7 @@ function renderMonthlyViews_() {
   if (monthlyState.loading) {
     monthlySwitch.innerHTML = '<span class="monthly-empty">取得中・・・</span>';
     monthlySummaryGrid.innerHTML = '';
-    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="7">取得中・・・</td></tr>';
+    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="9">取得中・・・</td></tr>';
     updateMonthlySoldCountLabel_(0);
     setMonthlySelectionMode_(false);
     monthlyChart.innerHTML = '<p class="monthly-empty">取得中・・・</p>';
@@ -4526,7 +4526,7 @@ function renderMonthlyViews_() {
   if (!months.length) {
     monthlySwitch.innerHTML = '<span class="monthly-empty">月別シートがありません。</span>';
     monthlySummaryGrid.innerHTML = '';
-    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="7">データがありません。</td></tr>';
+    monthlySoldBody.innerHTML = '<tr class="table-empty"><td colspan="9">データがありません。</td></tr>';
     updateMonthlySoldCountLabel_(0);
     setMonthlySelectionMode_(false);
     monthlyChart.innerHTML = '<p class="monthly-empty">データがありません。</p>';
@@ -4589,7 +4589,7 @@ function renderMonthlyViews_() {
         selected: selectedMonthlyItemIds.has(String(item && item.id || '').trim())
       });
     }).join('')
-    : '<tr class="table-empty"><td colspan="7">販売済みデータはありません。</td></tr>';
+    : '<tr class="table-empty"><td colspan="9">販売済みデータはありません。</td></tr>';
   if (!soldItems.length) {
     setMonthlySelectionMode_(false);
   } else {
@@ -4890,15 +4890,18 @@ function renderMonthlyRow_(item, options) {
   const profit = Number(item.profit || 0);
   const checkedAttr = opts.selected ? ' checked' : '';
   const id = String(item && item.id ? item.id : '');
+  const rowClass = profit < 0 || (margin !== null && margin < 0) ? 'row-sold-bad' : (margin !== null && margin >= 0.2 ? 'row-sold-good' : '');
   return ''
-    + '<tr data-id="' + escapeHtml(id) + '">'
+    + '<tr class="' + rowClass + '" data-id="' + escapeHtml(id) + '">'
     + '  <td class="selection-cell"><input data-select-monthly-row type="checkbox" aria-label="選択"' + checkedAttr + '></td>'
-    + '  <td>' + escapeHtml(item.name || '') + '</td>'
-    + '  <td class="money">' + formatYen(revenue) + '</td>'
-    + '  <td class="money">' + formatYen(shipping) + '</td>'
-    + '  <td class="money">' + formatYen(cost) + '</td>'
-    + '  <td class="money">' + formatSignedYen(profit) + '</td>'
-    + '  <td class="rate"><span class="pill ' + rateClass + '">' + formatPercent(margin) + '</span></td>'
+    + '  <td><input value="' + escapeHtml(item.name || '') + '" readonly></td>'
+    + '  <td><input type="number" value="' + escapeHtml(String(revenue || '')) + '" readonly></td>'
+    + '  <td><input type="number" value="' + escapeHtml(String(shipping || 0)) + '" readonly></td>'
+    + '  <td><input type="number" value="' + escapeHtml(String(cost || 0)) + '" readonly></td>'
+    + '  <td class="money profit-cell">' + formatSignedYen(profit) + '</td>'
+    + '  <td class="rate"><span class="pill rate-pill ' + rateClass + '">' + formatPercent(margin) + '</span></td>'
+    + '  <td class="center date-cell">' + formatDateShort_(item.createdAtMs) + '</td>'
+    + '  <td class="center date-cell">' + formatDateShort_(item.soldAtMs) + '</td>'
     + '</tr>';
 }
 
