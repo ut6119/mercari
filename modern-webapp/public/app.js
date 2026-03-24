@@ -332,6 +332,8 @@ function loadScriptOnce_(src) {
   });
 }
 
+var topStatsOriginalHtml_ = null;
+
 function activateView_(viewName) {
   const target = String(viewName || '').trim().toLowerCase() || 'home';
   viewTabs.forEach(function(button) {
@@ -340,6 +342,40 @@ function activateView_(viewName) {
   if (homeView) homeView.classList.toggle('active', target === 'home');
   if (monthlyView) monthlyView.classList.toggle('active', target === 'monthly');
   if (chartView) chartView.classList.toggle('active', target === 'chart');
+  var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
+  if (isModel && target !== 'monthly') {
+    restoreTopStats_();
+  }
+}
+
+function updateTopStatsForMonthly_(summary, totalCount) {
+  var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
+  if (!isModel) return;
+  var statsEl = document.querySelector('.stats');
+  if (!statsEl) return;
+  if (topStatsOriginalHtml_ === null) {
+    topStatsOriginalHtml_ = statsEl.innerHTML;
+  }
+  statsEl.innerHTML = ''
+    + '<div class="stat">'
+    + '  <div class="stat-label">原価合計</div>'
+    + '  <div class="stat-value">' + formatYen(sanitizeAmount_(summary.soldCost) + sanitizeAmount_(summary.unsoldCost)) + '</div>'
+    + '  <div class="stat-note">' + totalCount + '件</div>'
+    + '</div>'
+    + '<div class="stat">'
+    + '  <div class="stat-label">利益合計</div>'
+    + '  <div class="stat-value">' + formatSignedYen(summary.overallNet) + '</div>'
+    + '  <div class="stat-note">利益率 ' + formatPercent(summary.overallMargin) + '</div>'
+    + '</div>';
+}
+
+function restoreTopStats_() {
+  if (topStatsOriginalHtml_ === null) return;
+  var statsEl = document.querySelector('.stats');
+  if (statsEl) {
+    statsEl.innerHTML = topStatsOriginalHtml_;
+  }
+  topStatsOriginalHtml_ = null;
 }
 
 function resolveGuestModePreference_() {
@@ -4473,8 +4509,7 @@ function renderMonthlyViews_() {
     : null;
   const monthOverMonth = getMonthOverMonth_(summary, previousSummary);
 
-  monthlySummaryGrid.classList.remove('two-cards');
-  var monthlySummaryHtml = ''
+  monthlySummaryGrid.innerHTML = ''
     + '<div class="monthly-metric monthly-metric-split">'
     + '  <div class="monthly-metric-main">'
     + '    <div class="monthly-metric-label">合計収支</div>'
@@ -4487,21 +4522,7 @@ function renderMonthlyViews_() {
     + '    <div class="monthly-metric-note">' + monthOverMonth.amountText + '</div>'
     + '  </div>'
     + '</div>';
-  if (window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model') {
-    monthlySummaryGrid.classList.add('two-cards');
-    monthlySummaryHtml = ''
-      + '<div class="monthly-metric">'
-      + '  <div class="monthly-metric-label">原価合計</div>'
-      + '  <div class="monthly-metric-value">' + formatYen(sanitizeAmount_(summary.soldCost) + sanitizeAmount_(summary.unsoldCost)) + '</div>'
-      + '  <div class="monthly-metric-note">' + totalCount + '件</div>'
-      + '</div>'
-      + '<div class="monthly-metric">'
-      + '  <div class="monthly-metric-label">利益合計</div>'
-      + '  <div class="monthly-metric-value">' + formatSignedYen(summary.overallNet) + '</div>'
-      + '  <div class="monthly-metric-note">利益率 ' + formatPercent(summary.overallMargin) + '</div>'
-      + '</div>';
-  }
-  monthlySummaryGrid.innerHTML = monthlySummaryHtml;
+  updateTopStatsForMonthly_(summary, totalCount);
 
   const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
   updateMonthlySoldCountLabel_(soldItems.length);
