@@ -384,10 +384,14 @@ function updateTopStatsForMonthly_(summary, totalCount) {
 
   // カード領域内の月ボタンにイベント委譲
   statsEl.addEventListener('click', handleTopMonthSwitch_);
-  // 月別ビュー内の月選択・ヘッダーを非表示
+  // 月別ビュー内の不要要素を非表示
   if (monthlySwitch) monthlySwitch.style.display = 'none';
+  if (monthlySummaryGrid) monthlySummaryGrid.style.display = 'none';
   var monthlyH2 = monthlyView.querySelector('h2');
   if (monthlyH2) monthlyH2.style.display = 'none';
+  // panelのパディングを除去して直接テーブルを見せる
+  var monthlyPanel = monthlyView.querySelector('section.panel');
+  if (monthlyPanel) { monthlyPanel.style.padding = '0'; monthlyPanel.style.border = 'none'; monthlyPanel.style.background = 'none'; }
 }
 
 function handleTopMonthSwitch_(e) {
@@ -419,8 +423,11 @@ function restoreTopStats_() {
     statsEl.style.minHeight = '';
   }
   if (monthlySwitch) monthlySwitch.style.display = '';
+  if (monthlySummaryGrid) monthlySummaryGrid.style.display = '';
   var monthlyH2 = monthlyView ? monthlyView.querySelector('h2') : null;
   if (monthlyH2) monthlyH2.style.display = '';
+  var monthlyPanel = monthlyView ? monthlyView.querySelector('section.panel') : null;
+  if (monthlyPanel) { monthlyPanel.style.padding = ''; monthlyPanel.style.border = ''; monthlyPanel.style.background = ''; }
   topStatsOriginalHtml_ = null;
 }
 
