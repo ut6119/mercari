@@ -4524,19 +4524,24 @@ function renderMonthlyViews_() {
     : null;
   const monthOverMonth = getMonthOverMonth_(summary, previousSummary);
 
-  monthlySummaryGrid.innerHTML = ''
-    + '<div class="monthly-metric monthly-metric-split">'
-    + '  <div class="monthly-metric-main">'
-    + '    <div class="monthly-metric-label">合計収支</div>'
-    + '    <div class="monthly-metric-value">' + formatSignedYen(summary.overallNet) + '</div>'
-    + '    <div class="monthly-metric-note">' + totalCount + '件 / 利益率 ' + formatPercent(summary.overallMargin) + '</div>'
-    + '  </div>'
-    + '  <div class="monthly-metric-side">'
-    + '    <div class="monthly-metric-label">前月比</div>'
-    + '    <div class="monthly-metric-delta ' + monthOverMonth.className + '">' + monthOverMonth.arrow + ' ' + monthOverMonth.rateText + '</div>'
-    + '    <div class="monthly-metric-note">' + monthOverMonth.amountText + '</div>'
-    + '  </div>'
-    + '</div>';
+  var isModelEnv_ = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
+  if (isModelEnv_) {
+    monthlySummaryGrid.innerHTML = '';
+  } else {
+    monthlySummaryGrid.innerHTML = ''
+      + '<div class="monthly-metric monthly-metric-split">'
+      + '  <div class="monthly-metric-main">'
+      + '    <div class="monthly-metric-label">合計収支</div>'
+      + '    <div class="monthly-metric-value">' + formatSignedYen(summary.overallNet) + '</div>'
+      + '    <div class="monthly-metric-note">' + totalCount + '件 / 利益率 ' + formatPercent(summary.overallMargin) + '</div>'
+      + '  </div>'
+      + '  <div class="monthly-metric-side">'
+      + '    <div class="monthly-metric-label">前月比</div>'
+      + '    <div class="monthly-metric-delta ' + monthOverMonth.className + '">' + monthOverMonth.arrow + ' ' + monthOverMonth.rateText + '</div>'
+      + '    <div class="monthly-metric-note">' + monthOverMonth.amountText + '</div>'
+      + '  </div>'
+      + '</div>';
+  }
   updateTopStatsForMonthly_(summary, totalCount);
 
   const soldItems = Array.isArray(selected.soldItems) ? selected.soldItems : [];
