@@ -355,14 +355,13 @@
       .date-input { max-width: 70px; }
       tr.swipe-active td { transition: transform 0.25s ease; }
       tr.swipe-dragging td { transition: none; }
-      .swipe-delete-bg {
-        position: absolute; left: 0; top: 0; width: 80px; height: 100%;
-        display: flex; align-items: center; justify-content: center;
+      tr.swipe-open { position: relative; }
+      tr.swipe-open .swipe-delete-cell {
+        position: absolute; left: 0; top: 0; bottom: 0;
+        width: 80px; display: flex; align-items: center; justify-content: center;
         background: var(--danger); color: #fff; font-size: 13px; font-weight: 700;
-        cursor: pointer; z-index: 0; border-radius: 8px 0 0 8px;
-        opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        cursor: pointer; z-index: 0; border: none; padding: 0;
       }
-      .swipe-delete-bg.visible { opacity: 1; pointer-events: auto; }
       th.selection-col,
       td.selection-cell {
         width: 0;

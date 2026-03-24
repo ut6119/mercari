@@ -5462,54 +5462,51 @@ function showToast(message) {
   }, 2600);
 }
 
-// --- Swipe-to-delete ---
+// --- Swipe-to-delete & Long-press to select ---
 (function() {
 
   var SWIPE_THRESHOLD = 70;
   var DELETE_BTN_WIDTH = 80;
   var activeRow = null;
   var openRow = null;
-  var deleteBtn = null;
   var startX = 0;
   var startY = 0;
   var currentX = 0;
   var swiping = false;
 
-  function createDeleteBtn() {
-    deleteBtn = document.createElement('div');
-    deleteBtn.className = 'swipe-delete-bg';
-    deleteBtn.textContent = '削除';
-    deleteBtn.addEventListener('click', function() {
-      if (!openRow) return;
-      var id = openRow.dataset.id;
-      var status = openRow.closest('#soldTableBody') ? 'sold' : 'unsold';
-      closeSwipe();
-      deleteSwipedItem_(id, status);
-    });
-    document.body.appendChild(deleteBtn);
-  }
-
-  function positionDeleteBtn(row) {
-    var rect = row.getBoundingClientRect();
-    deleteBtn.style.position = 'fixed';
-    deleteBtn.style.top = rect.top + 'px';
-    deleteBtn.style.left = rect.left + 'px';
-    deleteBtn.style.height = rect.height + 'px';
-    deleteBtn.classList.add('visible');
-  }
-
   function setRowTranslate(row, x) {
-    var tds = row.querySelectorAll('td');
+    var tds = row.querySelectorAll('td:not(.swipe-delete-cell)');
     for (var i = 0; i < tds.length; i++) {
       tds[i].style.transform = x ? 'translateX(' + x + 'px)' : '';
     }
   }
 
+  function insertDeleteCell(row) {
+    if (row.querySelector('.swipe-delete-cell')) return;
+    var cell = document.createElement('td');
+    cell.className = 'swipe-delete-cell';
+    cell.textContent = '削除';
+    cell.addEventListener('click', function() {
+      var id = row.dataset.id;
+      var status = row.closest('#soldTableBody') ? 'sold' : 'unsold';
+      closeSwipe();
+      deleteSwipedItem_(id, status);
+    });
+    row.classList.add('swipe-open');
+    row.insertBefore(cell, row.firstChild);
+  }
+
+  function removeDeleteCell(row) {
+    var cell = row.querySelector('.swipe-delete-cell');
+    if (cell) row.removeChild(cell);
+    row.classList.remove('swipe-open');
+  }
+
   function openSwipe(row) {
     row.classList.remove('swipe-dragging');
     row.classList.add('swipe-active');
+    insertDeleteCell(row);
     setRowTranslate(row, DELETE_BTN_WIDTH);
-    positionDeleteBtn(row);
     openRow = row;
   }
 
@@ -5518,10 +5515,12 @@ function showToast(message) {
       openRow.classList.remove('swipe-dragging');
       openRow.classList.add('swipe-active');
       setRowTranslate(openRow, 0);
+      setTimeout(function() {
+        if (openRow) { removeDeleteCell(openRow); openRow = null; }
+      }, 260);
+      var ref = openRow;
       openRow = null;
-    }
-    if (deleteBtn) {
-      deleteBtn.classList.remove('visible');
+      setTimeout(function() { removeDeleteCell(ref); }, 260);
     }
   }
 
@@ -5582,26 +5581,16 @@ function showToast(message) {
     activeRow.classList.add('swipe-dragging');
     activeRow.classList.remove('swipe-active');
     setRowTranslate(activeRow, currentX);
-
-    if (currentX > SWIPE_THRESHOLD / 2) {
-      if (!deleteBtn) createDeleteBtn();
-      positionDeleteBtn(activeRow);
-    }
   }
 
   function handleTouchEnd() {
     if (!activeRow) return;
     if (currentX >= SWIPE_THRESHOLD) {
-      if (!deleteBtn) createDeleteBtn();
       openSwipe(activeRow);
     } else {
       activeRow.classList.remove('swipe-dragging');
       activeRow.classList.add('swipe-active');
       setRowTranslate(activeRow, 0);
-      if (openRow === activeRow) {
-        openRow = null;
-        if (deleteBtn) deleteBtn.classList.remove('visible');
-      }
     }
     activeRow = null;
     swiping = false;
@@ -5625,7 +5614,6 @@ function showToast(message) {
     longPressTimer = setTimeout(function() {
       longPressFired = true;
       longPressTimer = null;
-      // cancel any ongoing swipe
       activeRow = null;
       swiping = false;
       var status = row.closest('#soldTableBody') ? 'sold' : 'unsold';
@@ -5655,9 +5643,8 @@ function showToast(message) {
   }
 
   document.addEventListener('touchstart', function(e) {
-    if (!deleteBtn) createDeleteBtn();
     var row = e.target.closest('tr[data-id]');
-    if (!row && openRow && !e.target.closest('.swipe-delete-bg')) {
+    if (!row && openRow && !e.target.closest('.swipe-delete-cell')) {
       closeSwipe();
     }
   }, { passive: true });
