@@ -355,6 +355,7 @@ function activateView_(viewName) {
 function updateTopStatsForMonthly_(summary, totalCount) {
   var isModel = window.APP_CONFIG && String(window.APP_CONFIG.environment || '').trim().toLowerCase() === 'model';
   if (!isModel) return;
+  if (!monthlyView || !monthlyView.classList.contains('active')) return;
   var statsEl = document.querySelector('.stats');
   if (!statsEl) return;
   if (topStatsOriginalHtml_ === null) {
