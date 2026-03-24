@@ -5461,3 +5461,72 @@ function showToast(message) {
     toast.classList.remove('show');
   }, 2600);
 }
+
+// --- Long-press to select ---
+(function() {
+  var LONG_PRESS_MS = 500;
+  var longPressTimer = null;
+  var longPressFired = false;
+  var startX = 0;
+  var startY = 0;
+
+  function clearLongPress() {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
+
+  function getStatus(row) {
+    return row.closest('#soldTableBody') ? 'sold' : 'unsold';
+  }
+
+  var soldTbody = document.getElementById('soldTableBody');
+  var unsoldTbody = document.getElementById('unsoldTableBody');
+
+  [soldTbody, unsoldTbody].forEach(function(tbody) {
+    if (!tbody) return;
+    tbody.addEventListener('touchstart', function(e) {
+      var row = e.target.closest('tr[data-id]');
+      if (!row) return;
+      if (e.target.closest('input, button, a')) return;
+      longPressFired = false;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      clearLongPress();
+      longPressTimer = setTimeout(function() {
+        longPressFired = true;
+        longPressTimer = null;
+        var status = getStatus(row);
+        if (!selectionMode[status]) {
+          setSelectionMode(status, true);
+        }
+        var checkbox = row.querySelector('[data-select-row]');
+        if (checkbox) {
+          checkbox.checked = !checkbox.checked;
+          checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, LONG_PRESS_MS);
+    }, { passive: true });
+
+    tbody.addEventListener('touchmove', function(e) {
+      if (!longPressTimer) return;
+      var dx = e.touches[0].clientX - startX;
+      var dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) clearLongPress();
+    }, { passive: true });
+
+    tbody.addEventListener('touchend', function() { clearLongPress(); }, { passive: true });
+  });
+
+  // タップで選択モード解除
+  document.addEventListener('touchend', function(e) {
+    if (longPressFired) { longPressFired = false; return; }
+    var inSold = e.target.closest('#soldTableBody');
+    var inUnsold = e.target.closest('#unsoldTableBody');
+    if (selectionMode.sold && !inSold) {
+      setSelectionMode('sold', false);
+    }
+    if (selectionMode.unsold && !inUnsold) {
+      setSelectionMode('unsold', false);
+    }
+  }, { passive: true });
+})();
