@@ -18,6 +18,13 @@
 
 ## ログ
 
+### 2026-03-24 — claude-code — 入荷日・売却日を自由入力で編集可能に
+- **変更ファイル**: `modern-webapp/public/app.js`, `modern-webapp/public/index.html`, `modern-webapp/server.js`
+- **内容**: 入荷日・売却日セルをテキスト入力フィールドに変更。M/D形式で自由入力→タイムスタンプに変換して保存。auto-save対応。
+- **理由**: ユーザーが後から日付を修正できるようにする要望
+- **未完了 / 注意**: なし
+- **関連コミット**: 9bf8aa0
+
 ### 2026-03-18 — claude-code — エージェント間共有ワークフロー構築
 - **変更ファイル**: `DEVLOG.md`, `AGENTS.md`, `CLAUDE.md`（プロジェクトルート）
 - **内容**: Claude Code / Codex 間で変更履歴を共有する仕組みを導入
